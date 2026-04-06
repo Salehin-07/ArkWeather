@@ -15,10 +15,10 @@
     font-size: .88rem;
     margin-bottom: 1.5rem;
   }
-  .ble-status--idle     { background: var(--aw-surface2); color: var(--aw-muted); }
-  .ble-status--scanning { background: #fef3c7; color: #92400e; }
-  .ble-status--connected{ background: #f0fdf4; color: #166534; }
-  .ble-status--error    { background: #fef2f2; color: #991b1b; }
+  .ble-status--idle      { background: var(--aw-surface2); color: var(--aw-muted); }
+  .ble-status--scanning  { background: #fef3c7; color: #92400e; }
+  .ble-status--connected { background: #f0fdf4; color: #166534; }
+  .ble-status--error     { background: #fef2f2; color: #991b1b; }
 
   .ble-readings {
     display: grid;
@@ -33,9 +33,18 @@
     padding: .8rem 1rem;
     text-align: center;
   }
-  .ble-reading__val { font-family: 'Instrument Serif', serif; font-size: 1.5rem; line-height: 1; }
-  .ble-reading__lbl { font-size: .68rem; color: var(--aw-muted); text-transform: uppercase; letter-spacing: .06em; margin-top: .25rem; }
-
+  .ble-reading__val {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+  .ble-reading__lbl {
+    font-size: .68rem;
+    color: var(--aw-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-top: .25rem;
+  }
   .ble-browser-note {
     background: #fffbeb;
     border: 1px solid #fde68a;
@@ -68,17 +77,18 @@
 
 <div class="aw-container aw-container--sm">
 
-  <!-- Browser compatibility note -->
   <div class="ble-browser-note aw-fade">
     <span>⚠️</span>
     <div>
-      <strong>Chrome or Edge required.</strong> The Web Bluetooth API is only supported in Google Chrome and Microsoft Edge on desktop. It is not available in Firefox or Safari. Make sure Bluetooth is enabled on your computer.
+      <strong>Chrome or Edge required.</strong>
+      Web Bluetooth is only supported in Google Chrome and Microsoft Edge.
+      Not available in Firefox or Safari.
+      Ensure Bluetooth is enabled on your device.
     </div>
   </div>
 
   <div class="aw-card aw-fade aw-fade-1">
 
-    <!-- Status -->
     <div id="ble-status" class="ble-status ble-status--idle">
       <span id="ble-status-icon">📡</span>
       <span id="ble-status-text">Ready to scan — click the button below</span>
@@ -112,27 +122,37 @@
         </div>
       </div>
 
-      <!-- Link to registered device -->
       {% if devices %}
-        <div style="padding:1rem;background:var(--aw-surface);border-radius:8px;margin-bottom:1rem;">
-          <div class="aw-form__label" style="margin-bottom:.5rem;">Link BLE data to registered device (optional)</div>
-          <select id="ble-device-select" class="aw-form__input" style="margin-bottom:.5rem;">
-            <option value="">— Don't link —</option>
-            {% for dev in devices %}
-              <option value="{{ dev.device_id }}">{{ dev.name }}</option>
-            {% endfor %}
-          </select>
-          <div class="aw-form__help">Linking will display this device's WiFi readings on its dashboard too.</div>
+      <div style="padding:1rem;background:var(--aw-surface);border-radius:8px;margin-bottom:1rem;">
+        <div class="aw-form__label" style="margin-bottom:.5rem;">
+          Forward BLE data to server (optional)
         </div>
+        <select id="ble-device-select" class="aw-form__input" style="margin-bottom:.5rem;">
+          <option value="">— Local view only —</option>
+          {% for dev in devices %}
+            <option value="{{ dev.device_id }}" data-apikey="{{ dev.api_key }}">
+              {{ dev.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="aw-form__help">
+          When a device is selected, readings received over BLE will also
+          be pushed to the ArkWeather server in real time.
+        </div>
+      </div>
       {% endif %}
 
-      <button id="ble-disconnect-btn" class="aw-btn aw-btn--danger aw-btn--sm">Disconnect</button>
+      <button id="ble-disconnect-btn" class="aw-btn aw-btn--danger aw-btn--sm">
+        Disconnect
+      </button>
     </div>
 
     <!-- Scan button -->
     <div id="ble-scan-section">
-      <button id="ble-scan-btn" class="aw-btn aw-btn--primary" style="width:100%;justify-content:center;padding:.75rem;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:.4rem;">
+      <button id="ble-scan-btn" class="aw-btn aw-btn--primary"
+              style="width:100%;justify-content:center;padding:.75rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" style="margin-right:.4rem;">
           <path d="M6.5 6.5 12 1l5.5 5.5L12 12l-5.5-5.5ZM6.5 17.5 12 23l5.5-5.5L12 12l-5.5 5.5Z"/>
         </svg>
         Scan for ArkWeather Devices
@@ -141,15 +161,14 @@
 
   </div>
 
-  <!-- How it works -->
   <div class="aw-card aw-fade aw-fade-2" style="margin-top:1.25rem;background:var(--aw-surface);">
     <div class="aw-card__title">How BLE Pairing Works</div>
     <ol style="font-size:.85rem;color:var(--aw-muted);line-height:1.8;margin-top:.6rem;padding-left:1.2rem;">
       <li>Ensure your ESP32 is running the ArkWeather firmware with BLE enabled.</li>
       <li>Keep the device within ~10 metres of your computer.</li>
-      <li>Click "Scan" — your browser will show a popup to select the device.</li>
-      <li>Once connected, live readings will appear above every 5 seconds.</li>
-      <li>This is a <strong>local viewing mode</strong> — data is not sent to the server via BLE. For server push, WiFi is used automatically by the device.</li>
+      <li>Click "Scan" — your browser will show a popup listing nearby ArkWeather nodes.</li>
+      <li>Once connected, live readings update every 2 seconds via BLE notifications.</li>
+      <li>Optionally select a registered device to also forward readings to the server.</li>
     </ol>
   </div>
 
@@ -159,28 +178,32 @@
 {% block extra_js %}
 <script>
 /*
- * Web Bluetooth API — ArkWeather BLE Service
+ * Web Bluetooth — ArkWeather BLE Service
  *
- * ESP32 must advertise:
- *   Service UUID:        '12345678-1234-1234-1234-123456789abc'
- *   Characteristic UUID: '12345678-1234-1234-1234-123456789abd'
+ * Uses standard Bluetooth SIG Environmental Sensing Service (0x181A).
+ * Scans by device name "ArkWeather" — no UUID knowledge needed by the user.
+ * Rain uses one custom UUID (no SIG standard exists for rainfall).
  *
- * Characteristic value: JSON string, e.g.:
- *   {"t":30.5,"h":72.1,"p":1008.3,"r":true,"l":820}
+ * Characteristic encoding (standard SIG spec):
+ *   Temperature  → int16,  0.01 °C   little-endian
+ *   Humidity     → uint16, 0.01 %    little-endian
+ *   Pressure     → uint32, 0.1 Pa    little-endian
+ *   Illuminance  → uint24, 0.01 lux  little-endian
+ *   Rain         → uint8,  0=dry 1=raining
  */
 
-const SERVICE_UUID        = '12345678-1234-1234-1234-123456789abc';
-const CHARACTERISTIC_UUID = '12345678-1234-1234-1234-123456789abd';
+const BLE_RAIN_UUID = 'ArkW0001-0000-1000-8000-00805F9B34FB'.toLowerCase();
 
 let bleDevice = null;
-let bleCharacteristic = null;
-let pollInterval = null;
+let chars     = {};   // { temp, hum, pres, light, rain }
 
-const scanBtn        = document.getElementById('ble-scan-btn');
-const disconnectBtn  = document.getElementById('ble-disconnect-btn');
+const scanBtn         = document.getElementById('ble-scan-btn');
+const disconnectBtn   = document.getElementById('ble-disconnect-btn');
 const readingsSection = document.getElementById('ble-readings-section');
-const scanSection    = document.getElementById('ble-scan-section');
+const scanSection     = document.getElementById('ble-scan-section');
+const deviceSelect    = document.getElementById('ble-device-select');
 
+// ── Status helper ──────────────────────────────────────────────────────────
 function setStatus(type, icon, text) {
   const el = document.getElementById('ble-status');
   el.className = `ble-status ble-status--${type}`;
@@ -188,34 +211,130 @@ function setStatus(type, icon, text) {
   document.getElementById('ble-status-text').textContent = text;
 }
 
+// ── Decode standard SIG characteristic values ──────────────────────────────
+function decodeTemp(dv)  { return dv.getInt16(0,  true) / 100; }          // °C
+function decodeHum(dv)   { return dv.getUint16(0, true) / 100; }          // %
+function decodePres(dv)  { return dv.getUint32(0, true) / 10000; }        // hPa
+function decodeLight(dv) {
+  // uint24 little-endian
+  const raw = dv.getUint8(0) | (dv.getUint8(1) << 8) | (dv.getUint8(2) << 16);
+  return raw / 100;                                                         // lux
+}
+function decodeRain(dv)  { return dv.getUint8(0) === 1; }
+
+// ── Update DOM ─────────────────────────────────────────────────────────────
+function applyReading(field, value) {
+  const map = {
+    temp:  { id: 'ble-temp',  fmt: v => v.toFixed(1) },
+    hum:   { id: 'ble-hum',   fmt: v => v.toFixed(0) },
+    pres:  { id: 'ble-pres',  fmt: v => v.toFixed(1) },
+    light: { id: 'ble-light', fmt: v => Math.round(v) + ' lux' },
+    rain:  { id: 'ble-rain',  fmt: v => v ? '🌧 Yes' : '☀️ No' },
+  };
+  const cfg = map[field];
+  if (cfg) document.getElementById(cfg.id).textContent = cfg.fmt(value);
+}
+
+// ── Forward to Django server ───────────────────────────────────────────────
+// api_key is read from data-apikey on the selected <option>
+// so we never expose it in JS variables — it stays in the DOM attribute
+async function pushToServer(payload) {
+  if (!deviceSelect) return;
+  const selected = deviceSelect.options[deviceSelect.selectedIndex];
+  if (!selected || !selected.value) return;
+
+  const apiKey = selected.dataset.apikey;
+  if (!apiKey) return;
+
+  try {
+    const res = await fetch('/api/push/', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key:     apiKey,
+        temperature: payload.temp  ?? null,
+        humidity:    payload.hum   ?? null,
+        pressure:    payload.pres  ?? null,
+        is_raining:  payload.rain  ?? null,
+        light_value: payload.light !== undefined ? Math.round(payload.light) : null,
+        rain_value:  null   // raw ADC not available over BLE
+      })
+    });
+    if (!res.ok) console.warn('Server push failed:', res.status);
+  } catch (err) {
+    console.warn('Server push error:', err);
+  }
+}
+
+// ── Notification handlers ──────────────────────────────────────────────────
+// Each characteristic notifies independently — we keep a shared snapshot
+// and push to server whenever any value updates
+const snapshot = {};
+
+function makeHandler(field, decodeFn) {
+  return (event) => {
+    const value = decodeFn(event.target.value);
+    snapshot[field] = value;
+    applyReading(field, value);
+    pushToServer(snapshot);   // no-op if no device selected
+  };
+}
+
+// ── Subscribe to a characteristic ─────────────────────────────────────────
+async function subscribe(service, uuid, field, decodeFn) {
+  try {
+    const char = await service.getCharacteristic(uuid);
+    char.addEventListener('characteristicvaluechanged', makeHandler(field, decodeFn));
+    await char.startNotifications();
+
+    // Read once immediately so UI isn't blank on connect
+    const initial = await char.readValue();
+    const value   = decodeFn(initial);
+    snapshot[field] = value;
+    applyReading(field, value);
+
+    chars[field] = char;
+  } catch (err) {
+    console.warn(`BLE: could not subscribe to ${field}:`, err.message);
+  }
+}
+
+// ── Main scan ──────────────────────────────────────────────────────────────
 async function scanBLE() {
   if (!navigator.bluetooth) {
-    setStatus('error', '❌', 'Web Bluetooth not supported in this browser. Use Chrome or Edge.');
+    setStatus('error', '❌',
+      'Web Bluetooth not supported. Use Chrome or Edge on desktop/Android.');
     return;
   }
 
-  setStatus('scanning', '🔍', 'Scanning — select your ArkWeather device from the popup…');
+  setStatus('scanning', '🔍',
+    'Scanning — select your ArkWeather device from the popup…');
   scanBtn.disabled = true;
 
   try {
+    // Filter by device name — user sees "ArkWeather" in the browser popup
+    // No UUID constants required on this side
     bleDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [SERVICE_UUID] }],
-      optionalServices: [SERVICE_UUID]
+      filters: [{ name: BLE_DEVICE_NAME }],
+      optionalServices: ['environmental_sensing']
     });
 
     bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
     const server  = await bleDevice.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+    const service = await server.getPrimaryService('environmental_sensing');
 
-    setStatus('connected', '🟢', `Connected to ${bleDevice.name || 'ArkWeather Node'}`);
+    // Subscribe to all standard characteristics + one custom rain char
+    await subscribe(service, 'temperature',   'temp',  decodeTemp);
+    await subscribe(service, 'humidity',      'hum',   decodeHum);
+    await subscribe(service, 'pressure',      'pres',  decodePres);
+    await subscribe(service, 'illuminance',   'light', decodeLight);
+    await subscribe(service, BLE_RAIN_UUID,   'rain',  decodeRain);
+
+    setStatus('connected', '🟢',
+      `Connected to ${bleDevice.name || 'ArkWeather Node'}`);
     readingsSection.style.display = 'block';
-    scanSection.style.display = 'none';
-
-    // Poll every 5 seconds
-    await readBLE();
-    pollInterval = setInterval(readBLE, 5000);
+    scanSection.style.display     = 'none';
 
   } catch (err) {
     setStatus('error', '❌', `Failed: ${err.message}`);
@@ -223,38 +342,31 @@ async function scanBLE() {
   }
 }
 
-async function readBLE() {
-  if (!bleCharacteristic) return;
-  try {
-    const value = await bleCharacteristic.readValue();
-    const text  = new TextDecoder().decode(value);
-    const data  = JSON.parse(text);
-
-    if (data.t  !== undefined) document.getElementById('ble-temp').textContent  = parseFloat(data.t).toFixed(1);
-    if (data.h  !== undefined) document.getElementById('ble-hum').textContent   = parseFloat(data.h).toFixed(0);
-    if (data.p  !== undefined) document.getElementById('ble-pres').textContent  = parseFloat(data.p).toFixed(1);
-    if (data.r  !== undefined) document.getElementById('ble-rain').textContent  = data.r ? '🌧 Yes' : '☀️ No';
-    if (data.l  !== undefined) document.getElementById('ble-light').textContent = data.l;
-  } catch (err) {
-    console.warn('BLE read error:', err);
-  }
-}
-
+// ── Disconnect ─────────────────────────────────────────────────────────────
 function onDisconnected() {
-  clearInterval(pollInterval);
+  Object.keys(chars).forEach(field => {
+    try {
+      chars[field].removeEventListener(
+        'characteristicvaluechanged',
+        makeHandler(field, () => {})
+      );
+    } catch (_) {}
+  });
+  chars = {};
+
   setStatus('idle', '📡', 'Device disconnected. Click scan to reconnect.');
   readingsSection.style.display = 'none';
-  scanSection.style.display = 'block';
+  scanSection.style.display     = 'block';
   scanBtn.disabled = false;
-  bleCharacteristic = null;
 }
 
 function disconnectBLE() {
-  if (bleDevice && bleDevice.gatt.connected) {
-    bleDevice.gatt.disconnect();
-  }
+  if (bleDevice?.gatt.connected) bleDevice.gatt.disconnect();
   onDisconnected();
 }
+
+// ── Wire up buttons ────────────────────────────────────────────────────────
+const BLE_DEVICE_NAME = 'ArkWeather';   // matches firmware BLE_DEVICE_NAME
 
 scanBtn.addEventListener('click', scanBLE);
 disconnectBtn.addEventListener('click', disconnectBLE);
