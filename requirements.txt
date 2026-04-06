@@ -1,0 +1,7 @@
+django
+psycopg2
+dj-database-url
+gunucorn
+whitenoise
+djangorestframework
+celery
