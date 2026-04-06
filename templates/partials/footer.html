@@ -1,0 +1,14 @@
+{% load static %}
+<footer style="background:var(--aw-white);border-top:1px solid var(--aw-border);padding:1.5rem 2rem;margin-top:4rem;">
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+    <span style="font-size:.82rem;color:var(--aw-muted);">
+      © {% now "Y" %} ArkWeather — Community distributed weather network
+    </span>
+    <div style="display:flex;gap:1.5rem;">
+      <a href="{% url 'weather:home' %}" style="font-size:.82rem;color:var(--aw-muted);text-decoration:none;">Districts</a>
+      {% if user.is_authenticated %}
+        <a href="{% url 'weather:my_devices' %}" style="font-size:.82rem;color:var(--aw-muted);text-decoration:none;">My Devices</a>
+      {% endif %}
+    </div>
+  </div>
+</footer>

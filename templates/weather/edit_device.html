@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit {{ device.name }} — ArkWeather{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="aw-page-header">
+  <div style="max-width:760px;margin:0 auto;">
+    <div class="aw-breadcrumb">
+      <a href="{% url 'weather:home' %}">Home</a>
+      <span>›</span>
+      <a href="{% url 'weather:my_devices' %}">My Devices</a>
+      <span>›</span>
+      <a href="{% url 'weather:device_detail' device.device_id %}">{{ device.name }}</a>
+      <span>›</span>
+      <span>Edit</span>
+    </div>
+    <h1>Edit Device</h1>
+    <p>Update settings for <strong>{{ device.name }}</strong>.</p>
+  </div>
+</div>
+
+<div class="aw-container aw-container--sm">
+  <div class="aw-card aw-fade">
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label">Device Name *</label>
+          <input class="aw-form__input" type="text" name="{{ form.name.html_name }}"
+                 value="{{ form.name.value|default:'' }}" required placeholder="e.g. North Tangail Node 1">
+          {% for err in form.name.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label">District</label>
+          <select class="aw-form__input" name="{{ form.district.html_name }}">
+            <option value="">— Select district —</option>
+            {% for choice in form.district.field.choices %}
+              {% if choice.0 %}
+                <option value="{{ choice.0 }}" {% if form.district.value|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>{{ choice.1 }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="aw-form__group">
+          <label class="aw-form__label">Latitude</label>
+          <input class="aw-form__input" type="number" step="any" name="{{ form.latitude.html_name }}"
+                 value="{{ form.latitude.value|default:'' }}" placeholder="24.2513">
+        </div>
+
+        <div class="aw-form__group">
+          <label class="aw-form__label">Longitude</label>
+          <input class="aw-form__input" type="number" step="any" name="{{ form.longitude.html_name }}"
+                 value="{{ form.longitude.value|default:'' }}" placeholder="89.9167">
+        </div>
+
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label">Location Description</label>
+          <input class="aw-form__input" type="text" name="{{ form.location_note.html_name }}"
+                 value="{{ form.location_note.value|default:'' }}" placeholder="e.g. Rooftop, near the water tower">
+        </div>
+
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label">Firmware Version</label>
+          <input class="aw-form__input" type="text" name="{{ form.firmware_version.html_name }}"
+                 value="{{ form.firmware_version.value|default:'' }}" placeholder="v1.0.0">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--aw-border);">
+        <a href="{% url 'weather:device_detail' device.device_id %}" class="aw-btn aw-btn--ghost">Cancel</a>
+        <button type="submit" class="aw-btn aw-btn--primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

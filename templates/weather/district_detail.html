@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ district.name }} Weather — ArkWeather{% endblock %}
+{% block meta_description %}Live weather data for {{ district.name }}, {{ district.division }} — temperature, humidity, pressure and rain from {{ device_count }} active nodes.{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .dd-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media(max-width:900px) { .dd-grid { grid-template-columns: 1fr; } }
+
+  .dd-sidebar > * + * { margin-top: 1rem; }
+
+  .pressure-indicator {
+    background: var(--aw-white);
+    border: 1px solid var(--aw-border);
+    border-radius: var(--aw-radius);
+    padding: 1.25rem;
+    text-align: center;
+    box-shadow: var(--aw-shadow);
+  }
+  .pressure-indicator__val {
+    font-family: 'Instrument Serif', serif;
+    font-size: 2.4rem;
+    color: var(--aw-text);
+    line-height: 1;
+  }
+
+  .device-list { list-style: none; }
+  .device-list li {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem 0;
+    border-bottom: 1px solid var(--aw-surface2);
+    font-size: .82rem;
+  }
+  .device-list li:last-child { border-bottom: none; }
+  .device-list__name { font-weight: 500; color: var(--aw-text); }
+  .device-list__note { color: var(--aw-muted); font-size: .75rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<!-- Page header -->
+<div class="aw-page-header">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div class="aw-breadcrumb">
+      <a href="{% url 'weather:home' %}">Districts</a>
+      <span>›</span>
+      <span>{{ district.name }}</span>
+    </div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+      <div>
+        <h1>{{ district.name }}</h1>
+        {% if district.division %}<p>{{ district.division }} Division · {{ device_count }} active node{{ device_count|pluralize }}</p>{% endif %}
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem;">
+        <span class="aw-live-dot"></span>
+        <span style="font-size:.82rem;color:var(--aw-muted);">Updates every 30 s</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="aw-container">
+
+  <!-- Rain alert -->
+  {% if rain_alert %}
+    <div class="aw-alert aw-alert--{{ rain_alert.level }} aw-fade" style="margin-bottom:1.5rem;">
+      <span style="font-size:1.1rem;">
+        {% if rain_alert.level == 'warning' %}🌧{% elif rain_alert.level == 'watch' %}⚠️{% else %}☀️{% endif %}
+      </span>
+      <div>
+        <strong>
+          {% if rain_alert.level == 'warning' %}Rain Alert
+          {% elif rain_alert.level == 'watch' %}Rain Watch
+          {% else %}Clear Conditions
+          {% endif %}
+        </strong>
+        <div style="font-size:.85rem;margin-top:.1rem;">{{ rain_alert.message }}</div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Latest stats -->
+  {% if latest %}
+    <h2 class="aw-section-title aw-fade">Current Conditions</h2>
+    <div class="aw-stat-grid aw-fade aw-fade-1" style="margin-bottom:2rem;">
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#fef3c7;">🌡️</div>
+        <div class="aw-card__title">Temperature</div>
+        <div class="aw-card__value">
+          {% if latest.avg_temperature %}{{ latest.avg_temperature|floatformat:1 }}<span class="aw-card__unit">°C</span>{% else %}—{% endif %}
+        </div>
+        {% if latest.min_temperature and latest.max_temperature %}
+          <div class="aw-card__sub">↓{{ latest.min_temperature|floatformat:1 }} · ↑{{ latest.max_temperature|floatformat:1 }}°C</div>
+        {% endif %}
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#e0f2fe;">💧</div>
+        <div class="aw-card__title">Humidity</div>
+        <div class="aw-card__value">
+          {% if latest.avg_humidity %}{{ latest.avg_humidity|floatformat:0 }}<span class="aw-card__unit">%</span>{% else %}—{% endif %}
+        </div>
+        <div class="aw-card__sub">Relative humidity</div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#ede9fe;">🔵</div>
+        <div class="aw-card__title">Pressure</div>
+        <div class="aw-card__value">
+          {% if latest.avg_pressure %}{{ latest.avg_pressure|floatformat:1 }}<span class="aw-card__unit">hPa</span>{% else %}—{% endif %}
+        </div>
+        <div class="aw-card__sub">Atmospheric pressure</div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#dbeafe;">🌧</div>
+        <div class="aw-card__title">Rain Coverage</div>
+        <div class="aw-card__value" style="{% if latest.rain_percentage and latest.rain_percentage > 30 %}color:var(--aw-rain){% endif %}">
+          {% if latest.rain_percentage %}{{ latest.rain_percentage|floatformat:0 }}<span class="aw-card__unit">%</span>{% else %}—{% endif %}
+        </div>
+        <div class="aw-card__sub">Stations reporting rain</div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#fce7f3;">🌡️</div>
+        <div class="aw-card__title">Feels Like</div>
+        <div class="aw-card__value">
+          {% if latest.avg_heat_index %}{{ latest.avg_heat_index|floatformat:1 }}<span class="aw-card__unit">°C</span>{% else %}—{% endif %}
+        </div>
+        <div class="aw-card__sub">Heat index</div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#f0fdf4;">🌤</div>
+        <div class="aw-card__title">Cloud / Light</div>
+        <div class="aw-card__value">
+          {% if latest.avg_light %}{{ latest.avg_light|floatformat:0 }}<span class="aw-card__unit">lux</span>{% else %}—{% endif %}
+        </div>
+        <div class="aw-card__sub">Average LDR reading</div>
+      </div>
+
+    </div>
+  {% endif %}
+
+  <!-- Main grid: charts + sidebar -->
+  <div class="dd-grid">
+
+    <!-- Charts column -->
+    <div>
+      <h2 class="aw-section-title aw-fade aw-fade-2">24-Hour Trends</h2>
+
+      <div class="aw-chart-wrap aw-fade aw-fade-2" style="margin-bottom:1.25rem;">
+        <div class="aw-chart-tabs">
+          <button class="aw-chart-tab active" onclick="showChart('temp', this)">Temperature</button>
+          <button class="aw-chart-tab" onclick="showChart('hum', this)">Humidity</button>
+          <button class="aw-chart-tab" onclick="showChart('pres', this)">Pressure</button>
+          <button class="aw-chart-tab" onclick="showChart('rain', this)">Rain %</button>
+        </div>
+        <div style="position:relative;height:260px;">
+          <canvas id="chart-temp"></canvas>
+          <canvas id="chart-hum" style="display:none;position:absolute;top:0;left:0;"></canvas>
+          <canvas id="chart-pres" style="display:none;position:absolute;top:0;left:0;"></canvas>
+          <canvas id="chart-rain" style="display:none;position:absolute;top:0;left:0;"></canvas>
+        </div>
+      </div>
+
+      <h2 class="aw-section-title aw-fade aw-fade-3">7-Day Overview</h2>
+      <div class="aw-chart-wrap aw-fade aw-fade-3">
+        <div style="position:relative;height:200px;">
+          <canvas id="chart-7d"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="dd-sidebar aw-fade aw-fade-4">
+
+      <!-- Active nodes -->
+      <div class="aw-card">
+        <div class="aw-card__title">Active Nodes</div>
+        {% if active_devices_list %}
+          <ul class="device-list">
+            {% for dev in active_devices_list %}
+              <li>
+                <span class="aw-dot aw-dot--green"></span>
+                <div>
+                  <div class="device-list__name">{{ dev.name }}</div>
+                  {% if dev.location_note %}<div class="device-list__note">{{ dev.location_note }}</div>{% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p style="color:var(--aw-muted);font-size:.85rem;">No online devices with GPS coordinates.</p>
+        {% endif %}
+      </div>
+
+      <!-- About this data -->
+      <div class="aw-card" style="background:var(--aw-surface);">
+        <div class="aw-card__title">About this data</div>
+        <p style="font-size:.82rem;color:var(--aw-muted);line-height:1.6;margin-top:.4rem;">
+          Readings are aggregated hourly from all active ESP32 nodes in {{ district.name }}. Temperature, humidity and pressure are averaged across {{ device_count }} device{{ device_count|pluralize }}. Rain coverage is the percentage of devices reporting active precipitation.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const hourly = {{ hourly_24h|safe }};
+const daily  = {{ daily_7d|safe }};
+
+const labels24h = hourly.map(r => {
+  const d = new Date(r.hour);
+  return d.getHours() + ':00';
+});
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+  scales: {
+    x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 11 }, color: '#6b7a99' } },
+    y: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 11 }, color: '#6b7a99' } }
+  }
+};
+
+function makeLineChart(canvasId, labels, data, color, label, unit) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data,
+        borderColor: color,
+        backgroundColor: color + '18',
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        fill: true,
+        tension: 0.4,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: ctx => `${ctx.parsed.y}${unit}` }
+        }
+      }
+    }
+  });
+}
+
+// Build 24h charts
+makeLineChart('chart-temp',  labels24h, hourly.map(r => r.avg_temperature), '#2d6be4', 'Temperature', '°C');
+makeLineChart('chart-hum',   labels24h, hourly.map(r => r.avg_humidity),    '#60a5fa', 'Humidity', '%');
+makeLineChart('chart-pres',  labels24h, hourly.map(r => r.avg_pressure),    '#8b5cf6', 'Pressure', ' hPa');
+makeLineChart('chart-rain',  labels24h, hourly.map(r => r.rain_percentage), '#0ea5e9', 'Rain %', '%');
+
+// 7-day chart (temp + rain bar)
+const labels7d = daily.map(r => {
+  const d = new Date(r.date);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+});
+new Chart(document.getElementById('chart-7d'), {
+  data: {
+    labels: labels7d,
+    datasets: [
+      {
+        type: 'line',
+        label: 'Avg Temp (°C)',
+        data: daily.map(r => r.avg_temperature),
+        borderColor: '#2d6be4',
+        backgroundColor: 'transparent',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        tension: 0.4,
+        yAxisID: 'y',
+      },
+      {
+        type: 'bar',
+        label: 'Rain %',
+        data: daily.map(r => r.rain_percentage),
+        backgroundColor: '#60a5fa44',
+        borderColor: '#60a5fa',
+        borderWidth: 1,
+        yAxisID: 'y2',
+        borderRadius: 4,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, labels: { font: { family: 'DM Sans', size: 11 }, color: '#6b7a99', boxWidth: 12 } },
+      tooltip: { mode: 'index', intersect: false }
+    },
+    scales: {
+      x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' } },
+      y: { position: 'left',  grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' }, title: { display: true, text: '°C', font: { size: 10 }, color: '#6b7a99' } },
+      y2: { position: 'right', grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' }, title: { display: true, text: 'Rain %', font: { size: 10 }, color: '#6b7a99' }, max: 100, min: 0 }
+    }
+  }
+});
+
+// Tab switching
+const charts = ['temp','hum','pres','rain'];
+function showChart(name, btn) {
+  charts.forEach(c => {
+    document.getElementById('chart-' + c).style.display = (c === name) ? 'block' : 'none';
+  });
+  document.querySelectorAll('.aw-chart-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Register Device — ArkWeather{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="aw-page-header">
+  <div style="max-width:760px;margin:0 auto;">
+    <div class="aw-breadcrumb">
+      <a href="{% url 'weather:home' %}">Home</a>
+      <span>›</span>
+      <a href="{% url 'weather:my_devices' %}">My Devices</a>
+      <span>›</span>
+      <span>Register</span>
+    </div>
+    <h1>Register a Device</h1>
+    <p>Add your ESP32 node to start contributing readings to your district.</p>
+  </div>
+</div>
+
+<div class="aw-container aw-container--sm">
+  <div class="aw-card aw-fade">
+
+    <!-- Info banner -->
+    <div style="background:var(--aw-accent-lt);border-radius:10px;padding:1rem 1.2rem;margin-bottom:1.75rem;display:flex;gap:.75rem;align-items:flex-start;">
+      <span style="font-size:1.1rem;flex-shrink:0;">ℹ️</span>
+      <div style="font-size:.85rem;color:var(--aw-accent);line-height:1.6;">
+        After registering, you'll receive a unique <strong>API key</strong>. Flash it to your ESP32 sketch along with your server URL. The device will then push readings automatically every 30 seconds.
+      </div>
+    </div>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+        <!-- Device name -->
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label" for="{{ form.name.id_for_label }}">Device Name *</label>
+          <input class="aw-form__input {% if form.name.errors %}aw-form__input--error{% endif %}"
+                 type="text" name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}"
+                 value="{{ form.name.value|default:'' }}"
+                 placeholder="e.g. North Tangail Node 1" required>
+          {% for err in form.name.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <!-- District -->
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label" for="{{ form.district.id_for_label }}">District</label>
+          <select class="aw-form__input" name="{{ form.district.html_name }}" id="{{ form.district.id_for_label }}">
+            <option value="">— Select district —</option>
+            {% for choice in form.district.field.choices %}
+              {% if choice.0 %}
+                <option value="{{ choice.0 }}" {% if form.district.value|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>{{ choice.1 }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          {% for err in form.district.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <!-- Latitude -->
+        <div class="aw-form__group">
+          <label class="aw-form__label" for="{{ form.latitude.id_for_label }}">Latitude</label>
+          <input class="aw-form__input" type="number" step="any"
+                 name="{{ form.latitude.html_name }}" id="{{ form.latitude.id_for_label }}"
+                 value="{{ form.latitude.value|default:'' }}" placeholder="24.2513">
+          {% for err in form.latitude.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <!-- Longitude -->
+        <div class="aw-form__group">
+          <label class="aw-form__label" for="{{ form.longitude.id_for_label }}">Longitude</label>
+          <input class="aw-form__input" type="number" step="any"
+                 name="{{ form.longitude.html_name }}" id="{{ form.longitude.id_for_label }}"
+                 value="{{ form.longitude.value|default:'' }}" placeholder="89.9167">
+          {% for err in form.longitude.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <!-- Location note -->
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label" for="{{ form.location_note.id_for_label }}">Location Description</label>
+          <input class="aw-form__input" type="text"
+                 name="{{ form.location_note.html_name }}" id="{{ form.location_note.id_for_label }}"
+                 value="{{ form.location_note.value|default:'' }}"
+                 placeholder="e.g. Rooftop, near the water tower">
+          <div class="aw-form__help">Helps identify the node's position on the district map.</div>
+        </div>
+
+        <!-- Firmware -->
+        <div class="aw-form__group" style="grid-column:1/-1;">
+          <label class="aw-form__label" for="{{ form.firmware_version.id_for_label }}">Firmware Version</label>
+          <input class="aw-form__input" type="text"
+                 name="{{ form.firmware_version.html_name }}" id="{{ form.firmware_version.id_for_label }}"
+                 value="{{ form.firmware_version.value|default:'' }}" placeholder="v1.0.0">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--aw-border);">
+        <a href="{% url 'weather:my_devices' %}" class="aw-btn aw-btn--ghost">Cancel</a>
+        <button type="submit" class="aw-btn aw-btn--primary">Register Device →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

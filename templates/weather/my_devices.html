@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}My Devices — ArkWeather{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+<style>
+  .dev-card {
+    background: var(--aw-white);
+    border: 1px solid var(--aw-border);
+    border-radius: var(--aw-radius);
+    box-shadow: var(--aw-shadow);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    align-items: start;
+    transition: box-shadow .2s;
+  }
+  .dev-card:hover { box-shadow: var(--aw-shadow-md); }
+  .dev-card__name {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.2rem;
+    font-weight: 400;
+    margin-bottom: .2rem;
+  }
+  .dev-card__meta { font-size: .8rem; color: var(--aw-muted); display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .3rem; }
+  .dev-card__readings {
+    display: flex;
+    gap: 1.25rem;
+    margin-top: .9rem;
+    flex-wrap: wrap;
+  }
+  .dev-card__reading { text-align: center; }
+  .dev-card__reading-val { font-family: 'Instrument Serif', serif; font-size: 1.25rem; line-height: 1; }
+  .dev-card__reading-lbl { font-size: .68rem; color: var(--aw-muted); text-transform: uppercase; letter-spacing: .05em; margin-top: .15rem; }
+  .dev-card__actions { display: flex; flex-direction: column; gap: .4rem; align-items: flex-end; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="aw-page-header">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div class="aw-breadcrumb">
+      <a href="{% url 'weather:home' %}">Home</a>
+      <span>›</span>
+      <span>My Devices</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+      <div>
+        <h1>My Devices</h1>
+        <p>Manage your ESP32 weather nodes</p>
+      </div>
+      <div style="display:flex;gap:.75rem;">
+        <a href="{% url 'weather:ble_pair' %}" class="aw-btn aw-btn--outline">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6.5 6.5 11 11M17.5 6.5 12 12l5.5 5.5M6.5 17.5l5.5-5.5"/></svg>
+          BLE Pair
+        </a>
+        <a href="{% url 'weather:register_device' %}" class="aw-btn aw-btn--primary">
+          + Register Device
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="aw-container">
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="aw-alert aw-alert--{% if msg.tags == 'success' %}none{% else %}watch{% endif %}" style="margin-bottom:1.25rem;">
+        <span>{% if msg.tags == 'success' %}✓{% else %}ℹ{% endif %}</span>
+        <div>{{ msg }}</div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if device_data %}
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      {% for item in device_data %}
+        <div class="aw-card dev-card aw-fade aw-fade-{{ forloop.counter }}">
+          <div>
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+              <div class="dev-card__name">{{ item.device.name }}</div>
+              {% if item.device.status == 'online' %}
+                <span class="aw-badge aw-badge--online"><span class="aw-dot aw-dot--green"></span> Online</span>
+              {% else %}
+                <span class="aw-badge aw-badge--offline"><span class="aw-dot aw-dot--grey"></span> Offline</span>
+              {% endif %}
+            </div>
+
+            <div class="dev-card__meta">
+              {% if item.device.district %}<span>📍 {{ item.device.district.name }}</span>{% endif %}
+              {% if item.device.location_note %}<span>{{ item.device.location_note }}</span>{% endif %}
+              {% if item.device.last_seen %}<span>Last seen {{ item.device.last_seen|timesince }} ago</span>{% endif %}
+              {% if item.device.firmware_version %}<span>fw {{ item.device.firmware_version }}</span>{% endif %}
+            </div>
+
+            {% if item.latest %}
+              <div class="dev-card__readings">
+                {% if item.latest.temperature is not None %}
+                  <div class="dev-card__reading">
+                    <div class="dev-card__reading-val">{{ item.latest.temperature|floatformat:1 }}°C</div>
+                    <div class="dev-card__reading-lbl">Temp</div>
+                  </div>
+                {% endif %}
+                {% if item.latest.humidity is not None %}
+                  <div class="dev-card__reading">
+                    <div class="dev-card__reading-val">{{ item.latest.humidity|floatformat:0 }}%</div>
+                    <div class="dev-card__reading-lbl">Humidity</div>
+                  </div>
+                {% endif %}
+                {% if item.latest.pressure is not None %}
+                  <div class="dev-card__reading">
+                    <div class="dev-card__reading-val">{{ item.latest.pressure|floatformat:0 }}</div>
+                    <div class="dev-card__reading-lbl">hPa</div>
+                  </div>
+                {% endif %}
+                {% if item.latest.is_raining is not None %}
+                  <div class="dev-card__reading">
+                    <div class="dev-card__reading-val" style="{% if item.latest.is_raining %}color:var(--aw-rain){% endif %}">
+                      {% if item.latest.is_raining %}🌧{% else %}☀️{% endif %}
+                    </div>
+                    <div class="dev-card__reading-lbl">Rain</div>
+                  </div>
+                {% endif %}
+                <div class="dev-card__reading" style="border-left:1px solid var(--aw-border);padding-left:1.25rem;margin-left:.25rem;">
+                  <div class="dev-card__reading-val" style="font-size:.85rem;color:var(--aw-muted);">{{ item.latest.timestamp|timesince }}</div>
+                  <div class="dev-card__reading-lbl">ago</div>
+                </div>
+              </div>
+            {% else %}
+              <p style="color:var(--aw-muted);font-size:.82rem;margin-top:.75rem;">No readings received yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="dev-card__actions">
+            <a href="{% url 'weather:device_detail' item.device.device_id %}" class="aw-btn aw-btn--primary aw-btn--sm">View</a>
+            <a href="{% url 'weather:edit_device' item.device.device_id %}" class="aw-btn aw-btn--ghost aw-btn--sm">Edit</a>
+            <a href="{% url 'weather:delete_device' item.device.device_id %}" class="aw-btn aw-btn--danger aw-btn--sm">Delete</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+  {% else %}
+    <div style="text-align:center;padding:4rem 2rem;">
+      <div style="font-size:3rem;margin-bottom:1rem;opacity:.35;">📡</div>
+      <h3 style="font-family:'Instrument Serif',serif;font-size:1.4rem;font-weight:400;margin-bottom:.5rem;">No devices yet</h3>
+      <p style="color:var(--aw-muted);font-size:.9rem;margin-bottom:1.5rem;">Register your first ESP32 node to start contributing readings.</p>
+      <a href="{% url 'weather:register_device' %}" class="aw-btn aw-btn--primary">Register a Device</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Delete {{ device.name }} — ArkWeather{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="aw-container aw-container--sm" style="padding-top:4rem;">
+  <div class="aw-card aw-fade" style="text-align:center;padding:2.5rem 2rem;">
+    <div style="font-size:2.5rem;margin-bottom:1rem;">🗑️</div>
+    <h2 style="font-family:'Instrument Serif',serif;font-size:1.5rem;font-weight:400;margin-bottom:.5rem;">
+      Delete "{{ device.name }}"?
+    </h2>
+    <p style="color:var(--aw-muted);font-size:.9rem;margin-bottom:.5rem;">
+      This will permanently remove the device and all its readings from the database. This cannot be undone.
+    </p>
+    {% if device.district %}
+      <p style="color:var(--aw-muted);font-size:.85rem;margin-bottom:2rem;">
+        District: <strong>{{ device.district.name }}</strong>
+      </p>
+    {% endif %}
+
+    <form method="post" style="display:inline;">
+      {% csrf_token %}
+      <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;">
+        <a href="{% url 'weather:device_detail' device.device_id %}" class="aw-btn aw-btn--ghost">
+          Cancel — Keep Device
+        </a>
+        <button type="submit" class="aw-btn aw-btn--danger">
+          Yes, Delete Permanently
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

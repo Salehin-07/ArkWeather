@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ArkWeather — Live District Weather{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+<style>
+  .home-hero {
+    background: linear-gradient(135deg, #e8f0fe 0%, #f0f7ff 50%, #fff 100%);
+    border-bottom: 1px solid var(--aw-border);
+    padding: 3rem 2rem 2.5rem;
+    text-align: center;
+  }
+  .home-hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    background: var(--aw-accent-lt);
+    color: var(--aw-accent);
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: .3rem .9rem;
+    border-radius: 99px;
+    margin-bottom: 1rem;
+  }
+  .home-hero h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 2.6rem;
+    font-weight: 400;
+    color: var(--aw-text);
+    line-height: 1.18;
+    margin-bottom: .75rem;
+  }
+  .home-hero h1 em { font-style: italic; color: var(--aw-accent); }
+  .home-hero p { color: var(--aw-muted); font-size: 1rem; max-width: 520px; margin: 0 auto; }
+
+  .home-stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 2.5rem;
+    padding: 1.25rem 2rem;
+    background: var(--aw-white);
+    border-bottom: 1px solid var(--aw-border);
+    flex-wrap: wrap;
+  }
+  .home-stats-bar__item { text-align: center; }
+  .home-stats-bar__val {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.6rem;
+    color: var(--aw-text);
+    line-height: 1;
+  }
+  .home-stats-bar__lbl { font-size: .72rem; color: var(--aw-muted); text-transform: uppercase; letter-spacing: .06em; margin-top: .2rem; }
+
+  .district-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+  .district-card {
+    background: var(--aw-white);
+    border: 1px solid var(--aw-border);
+    border-radius: var(--aw-radius);
+    box-shadow: var(--aw-shadow);
+    padding: 1.4rem;
+    text-decoration: none;
+    color: var(--aw-text);
+    display: block;
+    transition: transform .2s, box-shadow .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .district-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--aw-accent), var(--aw-rain));
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .district-card:hover { transform: translateY(-3px); box-shadow: var(--aw-shadow-md); }
+  .district-card:hover::before { opacity: 1; }
+
+  .district-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+  .district-card__name {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .district-card__division { font-size: .78rem; color: var(--aw-muted); margin-top: .15rem; }
+
+  .district-card__readings {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: .5rem;
+    margin-bottom: 1rem;
+  }
+  .district-card__reading {
+    background: var(--aw-surface);
+    border-radius: 8px;
+    padding: .5rem .6rem;
+    text-align: center;
+  }
+  .district-card__reading-val {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+  .district-card__reading-lbl { font-size: .68rem; color: var(--aw-muted); margin-top: .2rem; }
+
+  .district-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: .8rem;
+    border-top: 1px solid var(--aw-surface2);
+    font-size: .78rem;
+    color: var(--aw-muted);
+  }
+  .district-card__arrow {
+    color: var(--aw-accent);
+    font-size: 1rem;
+    transition: transform .2s;
+  }
+  .district-card:hover .district-card__arrow { transform: translateX(4px); }
+
+  .no-data { color: var(--aw-muted); font-size: .88rem; }
+
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--aw-muted);
+  }
+  .empty-state__icon { font-size: 3rem; margin-bottom: 1rem; opacity: .4; }
+</style>
+{% endblock %}
+
+{% block body %}
+<!-- Hero -->
+<section class="home-hero">
+  <div class="home-hero__eyebrow">
+    <span class="aw-live-dot"></span>
+    Live network data
+  </div>
+  <h1>Weather data you can<br><em>actually trust</em></h1>
+  <p>Crowdsourced from hundreds of ESP32 nodes across Bangladesh — aggregated per district for accuracy no single station can match.</p>
+</section>
+
+<!-- Stats bar -->
+<div class="home-stats-bar">
+  <div class="home-stats-bar__item">
+    <div class="home-stats-bar__val">{{ total_online }}</div>
+    <div class="home-stats-bar__lbl">Nodes online</div>
+  </div>
+  <div class="home-stats-bar__item">
+    <div class="home-stats-bar__val">{{ total_devices }}</div>
+    <div class="home-stats-bar__lbl">Total devices</div>
+  </div>
+  <div class="home-stats-bar__item">
+    <div class="home-stats-bar__val">{{ district_data|length }}</div>
+    <div class="home-stats-bar__lbl">Districts covered</div>
+  </div>
+</div>
+
+<!-- District grid -->
+<div class="aw-container">
+  <h2 class="aw-section-title">All Districts</h2>
+
+  {% if district_data %}
+    <div class="district-grid">
+      {% for item in district_data %}
+        <a href="{% url 'weather:district_detail' item.district.id %}" class="district-card aw-fade aw-fade-{{ forloop.counter|divisibleby:5 }}">
+
+          <div class="district-card__header">
+            <div>
+              <div class="district-card__name">{{ item.district.name }}</div>
+              {% if item.district.division %}
+                <div class="district-card__division">{{ item.district.division }} Division</div>
+              {% endif %}
+            </div>
+            <div>
+              {% if item.online_devices > 0 %}
+                <span class="aw-badge aw-badge--online">
+                  <span class="aw-dot aw-dot--green"></span>
+                  {{ item.online_devices }} online
+                </span>
+              {% else %}
+                <span class="aw-badge aw-badge--offline">No devices</span>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if item.latest %}
+            <div class="district-card__readings">
+              <div class="district-card__reading">
+                <div class="district-card__reading-val">
+                  {% if item.latest.avg_temperature %}{{ item.latest.avg_temperature|floatformat:1 }}°{% else %}<span class="no-data">—</span>{% endif %}
+                </div>
+                <div class="district-card__reading-lbl">Temp</div>
+              </div>
+              <div class="district-card__reading">
+                <div class="district-card__reading-val">
+                  {% if item.latest.avg_humidity %}{{ item.latest.avg_humidity|floatformat:0 }}%{% else %}<span class="no-data">—</span>{% endif %}
+                </div>
+                <div class="district-card__reading-lbl">Humidity</div>
+              </div>
+              <div class="district-card__reading">
+                <div class="district-card__reading-val" style="{% if item.latest.rain_percentage and item.latest.rain_percentage > 30 %}color:var(--aw-rain){% endif %}">
+                  {% if item.latest.rain_percentage %}{{ item.latest.rain_percentage|floatformat:0 }}%{% else %}<span class="no-data">—</span>{% endif %}
+                </div>
+                <div class="district-card__reading-lbl">Rain</div>
+              </div>
+            </div>
+          {% else %}
+            <p class="no-data" style="margin:.75rem 0 1rem;">No readings yet</p>
+          {% endif %}
+
+          <div class="district-card__footer">
+            <span>
+              {% if item.latest %}
+                Updated {{ item.latest.hour|timesince }} ago
+              {% else %}
+                No data available
+              {% endif %}
+            </span>
+            <span class="district-card__arrow">→</span>
+          </div>
+
+        </a>
+      {% endfor %}
+    </div>
+
+  {% else %}
+    <div class="empty-state">
+      <div class="empty-state__icon">🌦</div>
+      <p>No districts configured yet. Add one via the admin panel.</p>
+    </div>
+  {% endif %}
+
+  {% if not user.is_authenticated %}
+    <div style="margin-top:2.5rem;background:linear-gradient(135deg,#e8f0fe,#f0f7ff);border:1px solid var(--aw-border);border-radius:var(--aw-radius);padding:2rem;text-align:center;">
+      <h3 style="font-family:'Instrument Serif',serif;font-size:1.4rem;font-weight:400;margin-bottom:.5rem;">Own an ESP32 node?</h3>
+      <p style="color:var(--aw-muted);font-size:.9rem;margin-bottom:1.25rem;">Register your device to contribute readings to your district and view your personal live dashboard.</p>
+      <a href="{% url 'account_signup' %}" class="aw-btn aw-btn--primary">Create account</a>
+      <a href="{% url 'account_login' %}" class="aw-btn aw-btn--ghost" style="margin-left:.5rem;">Sign in</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
