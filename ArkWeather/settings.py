@@ -26,10 +26,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-z_5l1k#ndq%()6a3grnj@e^g#-38p#(!qd1-0s*+us@2jb9)4*'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['arkweather.onrender.com']
-
+ALLOWED_HOSTS = ['arkweather.onrender.com',]
 CSRF_TRUSTED_ORIGINS = ['https://arkweather.onrender.com']
 # Application definition
 
@@ -44,7 +43,10 @@ INSTALLED_APPS = [
     
     #my apps 
     'weather',
+    'accounts',
     'pwa',
+    'scheduler.apps.SchedulerConfig',
+    'django_apscheduler',
 ]
 
 MIDDLEWARE = [
@@ -207,8 +209,16 @@ PWA_APP_SCREENSHOTS = [
     {
       'src': '/static/img/logo.png',
       'sizes': '750x1334',
-      "type": "img/png"
+      "type": "image/png"
     }
 ]
 
 PWA_SERVICE_WORKER_PATH = BASE_DIR / 'sw.js'
+
+
+LOGIN_URL          = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/my-devices/' 
+LOGOUT_REDIRECT_URL = '/' 
+
+APSCHEDULER_DATETIME_FORMAT = "N j, Y, f:s a"
+APSCHEDULER_RUN_NOW_TIMEOUT = 25   # seconds

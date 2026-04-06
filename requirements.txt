@@ -8,3 +8,4 @@ celery
 python-dotenv
 django-jazzmin
 django-pwa
+django-apscheduler

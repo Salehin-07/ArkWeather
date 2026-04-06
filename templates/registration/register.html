@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Create Account — ArkWeather{% endblock %}
+
+{% block extra_css %}
+{% include "weather/aw_base.css.html" %}
+<style>
+  .auth-wrap {
+    min-height: calc(100vh - 60px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #e8f0fe 0%, #f0f7ff 60%, #fff 100%);
+    padding: 2rem 1rem;
+  }
+  .auth-card {
+    background: #fff;
+    border: 1px solid var(--aw-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(45,107,228,.10);
+    padding: 2.5rem 2.25rem;
+    width: 100%;
+    max-width: 440px;
+  }
+  .auth-logo {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--aw-text);
+    margin-bottom: 1.75rem;
+  }
+  .auth-logo span { color: var(--aw-accent); }
+  .auth-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.75rem;
+    font-weight: 400;
+    margin-bottom: .35rem;
+  }
+  .auth-sub { font-size: .88rem; color: var(--aw-muted); margin-bottom: 1.75rem; }
+  .auth-footer {
+    text-align: center;
+    font-size: .83rem;
+    color: var(--aw-muted);
+    margin-top: 1.5rem;
+  }
+  .auth-footer a { color: var(--aw-accent); text-decoration: none; font-weight: 500; }
+  .auth-footer a:hover { text-decoration: underline; }
+
+  .pw-rules {
+    background: var(--aw-surface);
+    border-radius: 8px;
+    padding: .65rem .9rem;
+    font-size: .76rem;
+    color: var(--aw-muted);
+    line-height: 1.7;
+    margin-top: .4rem;
+    list-style: none;
+  }
+  .pw-rules li::before { content: '· '; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="auth-wrap">
+  <div class="auth-card aw-fade">
+
+    <div class="auth-logo">
+      <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="14" fill="#e8effd"/>
+        <path d="M7 18c0-3.866 3.134-7 7-7a7 7 0 0 1 7 7" stroke="#2d6be4" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+        <circle cx="14" cy="10" r="2.5" fill="#2d6be4"/>
+        <path d="M9 21h10" stroke="#2d6be4" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      Ark<span>Weather</span>
+    </div>
+
+    <h1 class="auth-title">Create account</h1>
+    <p class="auth-sub">Register to connect your ESP32 node to the network.</p>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="aw-form__group">
+        <label class="aw-form__label" for="{{ form.username.id_for_label }}">Username</label>
+        <input class="aw-form__input {% if form.username.errors %}aw-form__input--error{% endif %}"
+               type="text"
+               name="{{ form.username.html_name }}"
+               id="{{ form.username.id_for_label }}"
+               value="{{ form.username.value|default:'' }}"
+               autocomplete="username"
+               autofocus
+               placeholder="choose a username">
+        {% for err in form.username.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        <div class="aw-form__help">Letters, digits and @/./+/-/_ only.</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="aw-form__group">
+          <label class="aw-form__label" for="{{ form.password1.id_for_label }}">Password</label>
+          <input class="aw-form__input {% if form.password1.errors %}aw-form__input--error{% endif %}"
+                 type="password"
+                 name="{{ form.password1.html_name }}"
+                 id="{{ form.password1.id_for_label }}"
+                 autocomplete="new-password"
+                 placeholder="••••••••">
+          {% for err in form.password1.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <div class="aw-form__group">
+          <label class="aw-form__label" for="{{ form.password2.id_for_label }}">Confirm</label>
+          <input class="aw-form__input {% if form.password2.errors %}aw-form__input--error{% endif %}"
+                 type="password"
+                 name="{{ form.password2.html_name }}"
+                 id="{{ form.password2.id_for_label }}"
+                 autocomplete="new-password"
+                 placeholder="••••••••">
+          {% for err in form.password2.errors %}<div class="aw-form__error">{{ err }}</div>{% endfor %}
+        </div>
+      </div>
+
+      <ul class="pw-rules">
+        <li>At least 8 characters</li>
+        <li>Cannot be entirely numeric</li>
+        <li>Cannot be too similar to your username</li>
+      </ul>
+
+      <button type="submit" class="aw-btn aw-btn--primary" style="width:100%;justify-content:center;padding:.7rem;font-size:.95rem;margin-top:1.25rem;">
+        Create Account →
+      </button>
+    </form>
+
+    <div class="auth-footer" style="margin-top:1.25rem;">
+      Already have an account? <a href="{% url 'login' %}">Sign in</a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

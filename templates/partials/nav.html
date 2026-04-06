@@ -1,5 +1,6 @@
 {% load static %}
 <nav class="aw-nav" role="navigation" aria-label="Main navigation">
+
   <a href="{% url 'weather:home' %}" class="aw-nav__brand">
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
       <circle cx="14" cy="14" r="14" fill="#e8effd"/>
@@ -11,18 +12,354 @@
     Ark<span>Weather</span>
   </a>
 
-  <div class="aw-nav__links">
-    <a href="{% url 'weather:home' %}" {% if request.resolver_match.url_name == 'home' %}class="active"{% endif %}>
+  <!-- Hamburger button (mobile only) -->
+  <button class="aw-nav__burger" id="aw-burger" aria-label="Toggle menu" aria-expanded="false" aria-controls="aw-nav-menu">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+
+  <!-- Nav links -->
+  <div class="aw-nav__links" id="aw-nav-menu" role="menu">
+
+    <!-- Mobile header inside menu -->
+    <div class="aw-nav__mobile-header">
+      <span style="font-weight:600;font-size:1rem;color:var(--aw-text);">Ark<span style="color:var(--aw-accent);">Weather</span></span>
+      <button class="aw-nav__close" id="aw-close" aria-label="Close menu">✕</button>
+    </div>
+
+    <a href="{% url 'weather:home' %}"
+       class="aw-nav__link {% if request.resolver_match.url_name == 'home' %}active{% endif %}"
+       role="menuitem">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Districts
     </a>
+
     {% if user.is_authenticated %}
-      <a href="{% url 'weather:my_devices' %}" {% if 'device' in request.resolver_match.url_name %}class="active"{% endif %}>
+      <a href="{% url 'weather:my_devices' %}"
+         class="aw-nav__link {% if 'device' in request.resolver_match.url_name %}active{% endif %}"
+         role="menuitem">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         My Devices
       </a>
-      <a href="{% url 'weather:ble_pair' %}">BLE Pair</a>
-      <a href="{% url 'account_logout' %}">Sign out</a>
+
+      <a href="{% url 'weather:ble_pair' %}"
+         class="aw-nav__link {% if request.resolver_match.url_name == 'ble_pair' %}active{% endif %}"
+         role="menuitem">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6.5 6.5 11 11M17.5 6.5 12 12l5.5 5.5M6.5 17.5 5 19M6.5 17.5 12 12"/></svg>
+        BLE Pair
+      </a>
+
+      <div class="aw-nav__divider"></div>
+
+      <div class="aw-nav__user">
+        <div class="aw-nav__avatar">{{ user.username|first|upper }}</div>
+        <span class="aw-nav__username">{{ user.username }}</span>
+      </div>
+
+      <form method="post" action="{% url 'logout' %}" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="aw-nav__link aw-nav__link--logout" role="menuitem">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign out
+        </button>
+      </form>
+
     {% else %}
-      <a href="{% url 'account_login' %}" class="aw-nav__btn">Sign in</a>
+      <div class="aw-nav__divider"></div>
+      <a href="{% url 'register' %}" class="aw-nav__link" role="menuitem">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Register
+      </a>
+      <a href="{% url 'login' %}" class="aw-nav__btn" role="menuitem">Sign in</a>
     {% endif %}
+
   </div>
+
+  <!-- Mobile backdrop -->
+  <div class="aw-nav__backdrop" id="aw-backdrop"></div>
+
 </nav>
+
+<style>
+/* ═══════════════════════════════════════════════
+   ArkWeather — Responsive Nav
+   Mobile-first, drawer on small screens
+═══════════════════════════════════════════════ */
+.aw-nav {
+  background: var(--aw-white);
+  border-bottom: 1px solid var(--aw-border);
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+
+/* Brand */
+.aw-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  text-decoration: none;
+  color: var(--aw-text);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -.01em;
+  flex-shrink: 0;
+  z-index: 201;
+}
+.aw-nav__brand span { color: var(--aw-accent); }
+
+/* ── Hamburger ─────────────────────────────── */
+.aw-nav__burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: .4rem;
+  border-radius: 8px;
+  z-index: 201;
+  transition: background .15s;
+}
+.aw-nav__burger:hover { background: var(--aw-surface2); }
+.aw-nav__burger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--aw-text);
+  border-radius: 2px;
+  transition: transform .25s ease, opacity .2s ease, width .2s ease;
+  transform-origin: center;
+}
+
+/* Burger → X animation */
+.aw-nav__burger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.aw-nav__burger.open span:nth-child(2) { opacity: 0; width: 0; }
+.aw-nav__burger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── Desktop links ─────────────────────────── */
+.aw-nav__links {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+
+.aw-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  text-decoration: none;
+  color: var(--aw-muted);
+  font-size: .88rem;
+  font-weight: 500;
+  padding: .4rem .65rem;
+  border-radius: 8px;
+  transition: color .15s, background .15s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+}
+.aw-nav__link:hover { color: var(--aw-accent); background: var(--aw-accent-lt); }
+.aw-nav__link.active { color: var(--aw-accent); background: var(--aw-accent-lt); }
+.aw-nav__link--logout { color: #ef4444; width: 100%; }
+.aw-nav__link--logout:hover { color: #dc2626; background: #fef2f2; }
+
+.aw-nav__btn {
+  background: var(--aw-accent);
+  color: #fff !important;
+  padding: .4rem 1rem;
+  border-radius: 8px;
+  font-size: .85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background .2s, transform .1s;
+  margin-left: .25rem;
+}
+.aw-nav__btn:hover { background: #1d57c8; transform: translateY(-1px); }
+
+/* Desktop: hide mobile-only elements */
+.aw-nav__mobile-header { display: none; }
+.aw-nav__divider { display: none; }
+.aw-nav__user { display: none; }
+.aw-nav__backdrop { display: none; }
+
+/* ── Mobile (≤ 720px) ──────────────────────── */
+@media (max-width: 720px) {
+  .aw-nav { padding: 0 1rem; }
+
+  .aw-nav__burger { display: flex; }
+
+  /* Slide-in drawer */
+  .aw-nav__links {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: min(300px, 82vw);
+    height: 100dvh;
+    background: var(--aw-white);
+    border-left: 1px solid var(--aw-border);
+    box-shadow: -8px 0 32px rgba(0,0,0,.10);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0 0 2rem;
+    overflow-y: auto;
+    transition: right .28s cubic-bezier(.4,0,.2,1);
+    z-index: 300;
+  }
+  .aw-nav__links.open { right: 0; }
+
+  /* Mobile header row inside drawer */
+  .aw-nav__mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--aw-border);
+    margin-bottom: .5rem;
+    flex-shrink: 0;
+  }
+
+  .aw-nav__close {
+    background: var(--aw-surface2);
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--aw-muted);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s;
+  }
+  .aw-nav__close:hover { background: var(--aw-border); }
+
+  /* Links become full-width rows */
+  .aw-nav__link {
+    padding: .8rem 1.25rem;
+    border-radius: 0;
+    font-size: .95rem;
+    border-bottom: 1px solid var(--aw-surface2);
+  }
+  .aw-nav__link:last-child { border-bottom: none; }
+
+  .aw-nav__btn {
+    display: block;
+    margin: 1rem 1.25rem 0;
+    padding: .7rem 1rem;
+    text-align: center;
+    border-radius: 10px;
+    font-size: .95rem;
+  }
+
+  /* Divider */
+  .aw-nav__divider {
+    display: block;
+    height: 1px;
+    background: var(--aw-border);
+    margin: .5rem 0;
+  }
+
+  /* User pill */
+  .aw-nav__user {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    padding: .75rem 1.25rem;
+  }
+  .aw-nav__avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--aw-accent);
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .aw-nav__username {
+    font-size: .88rem;
+    font-weight: 500;
+    color: var(--aw-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Logout form fills full width */
+  .aw-nav__link--logout { border-bottom: none; }
+  form[action*="logout"] { display: block; }
+
+  /* Backdrop */
+  .aw-nav__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.35);
+    z-index: 299;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .28s ease;
+  }
+  .aw-nav__backdrop.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+}
+</style>
+
+<script>
+(function () {
+  const burger   = document.getElementById('aw-burger');
+  const menu     = document.getElementById('aw-nav-menu');
+  const backdrop = document.getElementById('aw-backdrop');
+  const close    = document.getElementById('aw-close');
+
+  function openMenu() {
+    menu.classList.add('open');
+    backdrop.classList.add('open');
+    burger.classList.add('open');
+    burger.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMenu() {
+    menu.classList.remove('open');
+    backdrop.classList.remove('open');
+    burger.classList.remove('open');
+    burger.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
+
+  burger.addEventListener('click', () =>
+    menu.classList.contains('open') ? closeMenu() : openMenu()
+  );
+  close.addEventListener('click', closeMenu);
+  backdrop.addEventListener('click', closeMenu);
+
+  // Close on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMenu();
+  });
+
+  // Close when a nav link is tapped (SPA-style feel)
+  menu.querySelectorAll('a.aw-nav__link').forEach(link => {
+    link.addEventListener('click', closeMenu);
+  });
+})();
+</script>
