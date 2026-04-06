@@ -1,7 +1,7 @@
 django
 psycopg2
 dj-database-url
-gunucorn
+gunicorn
 whitenoise
 djangorestframework
 celery
