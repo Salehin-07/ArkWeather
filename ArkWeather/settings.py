@@ -26,11 +26,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-z_5l1k#ndq%()6a3grnj@e^g#-38p#(!qd1-0s*+us@2jb9)4*'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['arkweather.onrender.com']
 
-
+CSRF_TRUSTED_ORIGINS = ['https://arkweather.onrender.com']
 # Application definition
 
 INSTALLED_APPS = [
