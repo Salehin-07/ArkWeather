@@ -32,7 +32,7 @@
 // ── Configuration ─────────────────────────────────────────────────────────────
 const char* WIFI_SSID     = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* SERVER_URL    = "https://arkweather.onrender.com//api/push/";
+const char* SERVER_URL    = "https://arkweather.onrender.com/api/push/";
 const char* API_KEY       = "YOUR-DEVICE-API-KEY-UUID";   // from Django device page
 
 const unsigned long PUSH_INTERVAL_MS = 30000;  // push every 30 seconds

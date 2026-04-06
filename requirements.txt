@@ -5,3 +5,4 @@ gunicorn
 whitenoise
 djangorestframework
 celery
+python-dotenv
