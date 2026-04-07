@@ -249,7 +249,7 @@ def delete_device(request, device_uuid):
 #  ESP32 API ENDPOINTS  (no CSRF — authenticated via api_key header)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@require_POST
+@csrf_exempt
 def api_push_reading(request):
     try:
         data = json.loads(request.body)
