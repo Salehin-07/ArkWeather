@@ -1,28 +1,9 @@
 /*
- * ArkWeather ESP32 Node Firmware
- * ─────────────────────────────
- * Sensors : DHT22 · BMP280 · Rain sensor (analogue) · LDR (module)
- * Display : 0.96" OLED SSD1306 (I2C)
- * Pushes  : JSON POST to /api/push/ every PUSH_INTERVAL_MS (WiFi)
- *         : BLE Environmental Sensing Service (standard SIG UUIDs)
- *         : Rain via one custom UUID (no SIG standard exists)
- *         : Light mapped to standard Illuminance characteristic
- *
- * Wiring
- * ──────
- * DHT22  DATA → GPIO 4
- * BMP280 SDA  → GPIO 21   SCL → GPIO 22
- * OLED   SDA  → GPIO 21   SCL → GPIO 22
- * Rain   AO   → GPIO 34   (ADC1)
- * LDR    AO   → GPIO 35   (ADC1)
- *
- * Libraries (Arduino Library Manager):
- *   DHT sensor library — Adafruit
- *   Adafruit BMP280 Library
- *   Adafruit SSD1306
- *   Adafruit GFX Library
- *   ArduinoJson
- *   ESP32 BLE Arduino (built into esp32 board package)
+ * ArkWeather ESP32 Node Firmware  —  FIXED + I2C AUTO-DETECT
+ * ────────────────────────────────────────────────────────────
+ * OLED  : tries 0x3C → 0x3D → SDA/SCL swapped 0x3C → SDA/SCL swapped 0x3D
+ * BMP280: tries 0x76 → 0x77
+ * All fallback results printed to Serial for debugging.
  */
 
 #include <WiFi.h>
@@ -52,27 +33,32 @@ const unsigned long PUSH_INTERVAL_MS = 30000;
 #define LDR_PIN      35
 #define RAIN_THRESH  500
 
+// ── I2C pins ───────────────────────────────────────────────────────────────
+#define SDA_NORMAL  21
+#define SCL_NORMAL  22
+#define SDA_SWAPPED 22   // fallback: wires physically swapped
+#define SCL_SWAPPED 21
+
 // ── OLED ───────────────────────────────────────────────────────────────────
 #define SCREEN_W   128
 #define SCREEN_H    64
 #define OLED_RESET  -1
 Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, OLED_RESET);
+bool oledOk = false;
 
 // ── Sensor objects ─────────────────────────────────────────────────────────
 DHT             dht(DHT_PIN, DHT_TYPE);
 Adafruit_BMP280 bmp;
+bool            bmpOk = false;
 
 // ── BLE UUIDs ──────────────────────────────────────────────────────────────
-// Standard Bluetooth SIG — Environmental Sensing Service
 #define BLE_DEVICE_NAME      "ArkWeather"
 #define BLE_SVC_ENV_SENSING  "0000181A-0000-1000-8000-00805F9B34FB"
-#define BLE_CHAR_TEMPERATURE "00002A6E-0000-1000-8000-00805F9B34FB"  // int16,  0.01 °C
-#define BLE_CHAR_HUMIDITY    "00002A6F-0000-1000-8000-00805F9B34FB"  // uint16, 0.01 %
-#define BLE_CHAR_PRESSURE    "00002A6D-0000-1000-8000-00805F9B34FB"  // uint32, 0.1 Pa
-#define BLE_CHAR_ILLUMINANCE "00002AFB-0000-1000-8000-00805F9B34FB"  // uint24, 0.01 lux
-
-// One custom UUID — only for rain (no SIG standard exists for this)
-#define BLE_CHAR_RAIN        "ArkW0001-0000-1000-8000-00805F9B34FB"  // uint8: 0=dry 1=raining
+#define BLE_CHAR_TEMPERATURE "00002A6E-0000-1000-8000-00805F9B34FB"
+#define BLE_CHAR_HUMIDITY    "00002A6F-0000-1000-8000-00805F9B34FB"
+#define BLE_CHAR_PRESSURE    "00002A6D-0000-1000-8000-00805F9B34FB"
+#define BLE_CHAR_ILLUMINANCE "00002AFB-0000-1000-8000-00805F9B34FB"
+#define BLE_CHAR_RAIN        "ArkW0001-0000-1000-8000-00805F9B34FB"
 
 // ── BLE state ──────────────────────────────────────────────────────────────
 BLEServer*         bleServer          = nullptr;
@@ -85,6 +71,78 @@ bool               bleClientConnected = false;
 
 // ── Loop state ─────────────────────────────────────────────────────────────
 unsigned long lastPush = 0;
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  I2C AUTO-DETECT
+//  Tries every combination of SDA/SCL pins and I2C addresses.
+//  Returns true if OLED is found and initialised.
+// ══════════════════════════════════════════════════════════════════════════
+
+bool tryOLED(uint8_t sda, uint8_t scl, uint8_t addr) {
+    Wire.begin(sda, scl);
+    delay(100);
+
+    // Check the address actually responds on the bus first
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() != 0) {
+        // No device at this address on this pin combo
+        return false;
+    }
+
+    // Device present — try full init
+    if (display.begin(SSD1306_SWITCHCAPVCC, addr)) {
+        Serial.printf("OLED found: SDA=%d SCL=%d addr=0x%02X\n", sda, scl, addr);
+        return true;
+    }
+    return false;
+}
+
+void initOLED() {
+    Serial.println("OLED: scanning all fallbacks...");
+
+    // Try 1: Normal wiring, address 0x3C  (most common)
+    if (tryOLED(SDA_NORMAL, SCL_NORMAL, 0x3C)) { oledOk = true; return; }
+    Serial.println("OLED: 0x3C normal wiring — not found");
+
+    // Try 2: Normal wiring, address 0x3D
+    if (tryOLED(SDA_NORMAL, SCL_NORMAL, 0x3D)) { oledOk = true; return; }
+    Serial.println("OLED: 0x3D normal wiring — not found");
+
+    // Try 3: Swapped SDA/SCL, address 0x3C  (common mistake)
+    if (tryOLED(SDA_SWAPPED, SCL_SWAPPED, 0x3C)) { oledOk = true; return; }
+    Serial.println("OLED: 0x3C swapped wiring — not found");
+
+    // Try 4: Swapped SDA/SCL, address 0x3D
+    if (tryOLED(SDA_SWAPPED, SCL_SWAPPED, 0x3D)) { oledOk = true; return; }
+    Serial.println("OLED: 0x3D swapped wiring — not found");
+
+    // All 4 combinations failed
+    Serial.println("OLED: ALL fallbacks failed — check VCC=3.3V and connections");
+    oledOk = false;
+
+    // Restore normal I2C for BMP280
+    Wire.begin(SDA_NORMAL, SCL_NORMAL);
+}
+
+void initBMP() {
+    Serial.println("BMP280: scanning...");
+
+    if (bmp.begin(0x76)) {
+        Serial.println("BMP280 found at 0x76");
+        bmpOk = true;
+        return;
+    }
+    Serial.println("BMP280: 0x76 not found");
+
+    if (bmp.begin(0x77)) {
+        Serial.println("BMP280 found at 0x77");
+        bmpOk = true;
+        return;
+    }
+    Serial.println("BMP280: 0x77 not found — check wiring");
+    bmpOk = false;
+}
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -106,41 +164,29 @@ class ArkWeatherBLECallbacks : public BLEServerCallbacks {
 
 void initBLE() {
     BLEDevice::init(BLE_DEVICE_NAME);
-
     bleServer = BLEDevice::createServer();
     bleServer->setCallbacks(new ArkWeatherBLECallbacks());
 
-    // 20 handles covers 5 characteristics × (char + descriptor + value) comfortably
     BLEService* svc = bleServer->createService(BLEUUID(BLE_SVC_ENV_SENSING), 20);
 
-    charTemp = svc->createCharacteristic(
-        BLE_CHAR_TEMPERATURE,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-    );
+    charTemp = svc->createCharacteristic(BLE_CHAR_TEMPERATURE,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     charTemp->addDescriptor(new BLE2902());
 
-    charHum = svc->createCharacteristic(
-        BLE_CHAR_HUMIDITY,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-    );
+    charHum = svc->createCharacteristic(BLE_CHAR_HUMIDITY,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     charHum->addDescriptor(new BLE2902());
 
-    charPres = svc->createCharacteristic(
-        BLE_CHAR_PRESSURE,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-    );
+    charPres = svc->createCharacteristic(BLE_CHAR_PRESSURE,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     charPres->addDescriptor(new BLE2902());
 
-    charLight = svc->createCharacteristic(
-        BLE_CHAR_ILLUMINANCE,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-    );
+    charLight = svc->createCharacteristic(BLE_CHAR_ILLUMINANCE,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     charLight->addDescriptor(new BLE2902());
 
-    charRain = svc->createCharacteristic(
-        BLE_CHAR_RAIN,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-    );
+    charRain = svc->createCharacteristic(BLE_CHAR_RAIN,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     charRain->addDescriptor(new BLE2902());
 
     svc->start();
@@ -149,7 +195,7 @@ void initBLE() {
     adv->addServiceUUID(BLE_SVC_ENV_SENSING);
     adv->setScanResponse(true);
     adv->setMinPreferred(0x06);
-    adv->setMinPreferred(0x12);
+    adv->setMaxPreferred(0x12);
     BLEDevice::startAdvertising();
 
     Serial.println("BLE: advertising as '" BLE_DEVICE_NAME "'");
@@ -158,40 +204,30 @@ void initBLE() {
 void updateBLE(float temp, float hum, float pres, bool raining, int light) {
     if (!charTemp) return;
 
-    // Temperature — int16, unit 0.01 °C  (e.g. 3050 = 30.50 °C)
     if (!isnan(temp)) {
         int16_t t = (int16_t)(temp * 100);
         charTemp->setValue((uint8_t*)&t, 2);
         if (bleClientConnected) charTemp->notify();
     }
-
-    // Humidity — uint16, unit 0.01 %  (e.g. 7210 = 72.10 %)
     if (!isnan(hum)) {
         uint16_t h = (uint16_t)(hum * 100);
         charHum->setValue((uint8_t*)&h, 2);
         if (bleClientConnected) charHum->notify();
     }
-
-    // Pressure — uint32, unit 0.1 Pa  (e.g. 100830000 = 1008.3 hPa)
     if (pres > 0) {
-        uint32_t p = (uint32_t)(pres * 10000);  // hPa → 0.1 Pa
+        uint32_t p = (uint32_t)(pres * 1000);
         charPres->setValue((uint8_t*)&p, 4);
         if (bleClientConnected) charPres->notify();
     }
-
-    // Illuminance — uint24, unit 0.01 lux
-    // LDR gives 0–1023 ADC; map linearly to 0–100000 (0–1000 lux range)
     {
-        uint32_t lux_raw = (uint32_t)map(light, 0, 1023, 0, 10000000); // 0.01 lux units
-        uint8_t  lux[3];
+        uint32_t lux_raw = (uint32_t)((long)light * 10000000L / 4095L);
+        uint8_t lux[3];
         lux[0] =  lux_raw        & 0xFF;
         lux[1] = (lux_raw >>  8) & 0xFF;
         lux[2] = (lux_raw >> 16) & 0xFF;
         charLight->setValue(lux, 3);
         if (bleClientConnected) charLight->notify();
     }
-
-    // Rain — uint8  (0 = dry, 1 = raining)
     {
         uint8_t r = raining ? 1 : 0;
         charRain->setValue(&r, 1);
@@ -206,23 +242,27 @@ void updateBLE(float temp, float hum, float pres, bool raining, int light) {
 
 void setup() {
     Serial.begin(115200);
+    delay(500);  // let Serial settle
+    Serial.println("\n=== ArkWeather booting ===");
 
-    // OLED
-    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        Serial.println("OLED init failed");
+    // OLED — auto-detect all I2C combinations
+    initOLED();
+
+    if (oledOk) {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        displayMessage("ArkWeather", "Booting...");
     }
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    displayMessage("ArkWeather", "Booting...");
 
-    // Sensors
+    // DHT22
     dht.begin();
-    if (!bmp.begin(0x76)) {
-        Serial.println("BMP280 not found — try 0x77");
-    }
+    Serial.println("DHT22: started");
 
-    // BLE — start before WiFi so device is discoverable immediately
+    // BMP280 — auto-detect address
+    initBMP();
+
+    // BLE
     initBLE();
     displayMessage("BLE", "Advertising...");
     delay(500);
@@ -230,6 +270,7 @@ void setup() {
     // WiFi
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     displayMessage("ArkWeather", "Connecting WiFi...");
+    Serial.print("WiFi: connecting");
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
         delay(500);
@@ -241,10 +282,12 @@ void setup() {
         Serial.println("\nWiFi connected: " + WiFi.localIP().toString());
         displayMessage("WiFi OK", WiFi.localIP().toString().c_str());
     } else {
+        Serial.println("\nWiFi FAILED — BLE only mode");
         displayMessage("WiFi FAILED", "BLE only mode");
     }
 
     delay(1500);
+    Serial.println("=== Boot complete ===");
 }
 
 
@@ -255,21 +298,16 @@ void setup() {
 void loop() {
     unsigned long now = millis();
 
-    // Read sensors
     float temperature = dht.readTemperature();
     float humidity    = dht.readHumidity();
-    float pressure    = bmp.readPressure() / 100.0F;   // Pa → hPa
+    float pressure    = bmpOk ? (bmp.readPressure() / 100.0F) : 0.0F;
     int   rainValue   = analogRead(RAIN_PIN);
     int   lightValue  = analogRead(LDR_PIN);
-    bool  isRaining   = (rainValue > RAIN_THRESH);
+    bool  isRaining   = (rainValue < RAIN_THRESH);
 
-    // Update OLED
     updateDisplay(temperature, humidity, pressure, isRaining, lightValue);
-
-    // Update BLE characteristics — notifies connected client immediately
     updateBLE(temperature, humidity, pressure, isRaining, lightValue);
 
-    // WiFi push every PUSH_INTERVAL_MS
     if (now - lastPush >= PUSH_INTERVAL_MS) {
         if (WiFi.status() == WL_CONNECTED) {
             pushReading(temperature, humidity, pressure,
@@ -297,7 +335,7 @@ void pushReading(float temp, float hum, float pres,
     http.addHeader("Content-Type", "application/json");
 
     StaticJsonDocument<256> doc;
-    doc["api_key"]    = API_KEY;
+    doc["api_key"]     = API_KEY;
     if (!isnan(temp))  doc["temperature"] = temp;
     if (!isnan(hum))   doc["humidity"]    = hum;
     if (pres > 0)      doc["pressure"]    = pres;
@@ -324,35 +362,48 @@ void pushReading(float temp, float hum, float pres,
 // ══════════════════════════════════════════════════════════════════════════
 
 void updateDisplay(float temp, float hum, float pres, bool raining, int light) {
+    if (!oledOk) return;
+
     display.clearDisplay();
-    display.setCursor(0, 0);
     display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    char buf[32];
 
+    display.setCursor(0, 0);
     display.println("-- ArkWeather Node --");
-    display.printf("Temp  : %.1f C\n",   temp);
-    display.printf("Humid : %.1f %%\n",  hum);
-    display.printf("Press : %.1f hPa\n", pres);
-    display.printf("Rain  : %s\n",       raining ? "YES" : "No");
-    display.printf("Light : %d\n",       light);
 
-    // Top-right: W = WiFi connected, B = BLE connected, X = neither
+    if (isnan(temp)) display.println("Temp  : --");
+    else { snprintf(buf, sizeof(buf), "Temp  : %.1f C", temp);  display.println(buf); }
+
+    if (isnan(hum))  display.println("Humid : --");
+    else { snprintf(buf, sizeof(buf), "Humid : %.1f %%", hum);  display.println(buf); }
+
+    if (pres <= 0)   display.println("Press : --");
+    else { snprintf(buf, sizeof(buf), "Press : %.1f hPa", pres); display.println(buf); }
+
+    snprintf(buf, sizeof(buf), "Rain  : %s", raining ? "YES" : "No");
+    display.println(buf);
+
+    snprintf(buf, sizeof(buf), "Light : %d", light);
+    display.println(buf);
+
+    // Top-right: W=WiFi B=BLE X=none
     display.setCursor(110, 0);
-    if (WiFi.status() == WL_CONNECTED && bleClientConnected)
-        display.print("WB");
-    else if (WiFi.status() == WL_CONNECTED)
-        display.print("W ");
-    else if (bleClientConnected)
-        display.print(" B");
-    else
-        display.print(" X");
+    if      (WiFi.status() == WL_CONNECTED && bleClientConnected) display.print("WB");
+    else if (WiFi.status() == WL_CONNECTED)                       display.print("W ");
+    else if (bleClientConnected)                                   display.print(" B");
+    else                                                           display.print(" X");
 
     display.display();
 }
 
 void displayMessage(const char* line1, const char* line2) {
+    if (!oledOk) return;
+
     display.clearDisplay();
-    display.setCursor(0, 20);
     display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 20);
     display.println(line1);
     display.println(line2);
     display.display();
