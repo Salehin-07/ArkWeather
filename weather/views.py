@@ -249,53 +249,36 @@ def delete_device(request, device_uuid):
 #  ESP32 API ENDPOINTS  (no CSRF — authenticated via api_key header)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@csrf_exempt
 @require_POST
 def api_push_reading(request):
-    """
-    ESP32 POSTs JSON here every N seconds.
-
-    Expected JSON body:
-    {
-        "api_key": "<uuid>",
-        "temperature": 30.5,
-        "humidity": 72.1,
-        "pressure": 1008.3,
-        "rain_value": 320,
-        "is_raining": true,
-        "light_value": 800
-    }
-
-    Returns: {"status": "ok", "reading_id": <int>}
-    """
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
     api_key = data.get('api_key')
-    if not api_key:
-        return JsonResponse({'error': 'api_key required'}, status=401)
+    device = Device.objects.filter(api_key=api_key).first()
 
-    try:
-        device = Device.objects.get(api_key=api_key)
-    except Device.DoesNotExist:
+    if not device:
         return JsonResponse({'error': 'Unknown device'}, status=401)
 
+    # Create weather reading safely
     reading = WeatherReading.objects.create(
-        device      = device,
-        temperature = data.get('temperature'),
-        humidity    = data.get('humidity'),
-        pressure    = data.get('pressure'),
-        rain_value  = data.get('rain_value'),
-        is_raining  = data.get('is_raining'),
-        light_value = data.get('light_value'),
+        device=device,
+        temperature=data.get('temperature'),
+        humidity=data.get('humidity'),
+        pressure=data.get('pressure'),
+        rain_value=data.get('rain_value', 0),
+        is_raining=data.get('is_raining', False),
+        light_value=data.get('light_value', 0),
     )
 
     device.mark_online()
 
-    return JsonResponse({'status': 'ok', 'reading_id': reading.pk}, status=201)
-
+    return JsonResponse({
+        'status': 'ok',
+        'reading_id': reading.pk
+    }, status=201)
 
 @require_GET
 def api_latest_reading(request, device_uuid):
