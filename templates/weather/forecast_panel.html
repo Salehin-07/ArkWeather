@@ -1,0 +1,352 @@
+{# weather/forecast_panel.html — include with {% include "weather/forecast_panel.html" %} #}
+{# Expects: forecast (dict), forecast_cards (list), forecast_json (JSON string) #}
+{# Optional: forecast_title (str), show_pressure_signal (bool) #}
+
+{% if forecast %}
+<div class="aw-forecast-panel aw-fade aw-fade-3">
+
+  {# ── Panel header ─────────────────────────────────────────────── #}
+  <div class="aw-forecast-panel__head">
+    <h2 class="aw-section-title" style="margin-bottom:0;">
+      {% if forecast_title %}{{ forecast_title }}{% else %}24-Hour Forecast{% endif %}
+    </h2>
+    <div class="aw-forecast-panel__meta">
+      <span class="aw-forecast-confidence aw-forecast-confidence--{{ forecast.confidence }}">
+        {% if forecast.confidence == 'high' %}● High confidence
+        {% elif forecast.confidence == 'medium' %}◐ Medium confidence
+        {% else %}○ Low confidence{% endif %}
+      </span>
+      <span class="aw-forecast-panel__basis">
+        based on {{ forecast.data_points_used }} hourly reading{{ forecast.data_points_used|pluralize }}
+      </span>
+    </div>
+  </div>
+
+  {# ── Outlook summary ─────────────────────────────────────────── #}
+  <div class="aw-forecast-outlook">
+    <span class="aw-forecast-outlook__icon">
+      {% with r=forecast.rain_probability %}
+        {% if r %}
+          {% with maxr=r|first %}
+            {% if maxr >= 0.6 %}🌧{% elif maxr >= 0.35 %}🌦{% else %}☀️{% endif %}
+          {% endwith %}
+        {% else %}☀️{% endif %}
+      {% endwith %}
+    </span>
+    <div>
+      <div class="aw-forecast-outlook__text">{{ forecast.now_summary }}</div>
+      {% if forecast.trend_temp %}
+        <div class="aw-forecast-outlook__trend">
+          {% if forecast.trend_temp > 0.3 %}
+            <span style="color:var(--aw-red);">↑</span> Warming {{ forecast.trend_temp|floatformat:1 }}°C/h trend
+          {% elif forecast.trend_temp < -0.3 %}
+            <span style="color:var(--aw-rain);">↓</span> Cooling {{ forecast.trend_temp|floatformat:1 }}°C/h trend
+          {% else %}
+            <span style="color:var(--aw-green);">→</span> Temperature stable
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Pressure signal badge ────────────────────────────────────── #}
+  {% if forecast.pressure_signal and forecast.pressure_signal.delta != None %}
+    {% with ps=forecast.pressure_signal %}
+    <div class="aw-pressure-signal
+      {% if ps.delta <= -3 %}aw-pressure-signal--fall
+      {% elif ps.delta >= 3 %}aw-pressure-signal--rise
+      {% else %}aw-pressure-signal--steady{% endif %}">
+      <span class="aw-pressure-signal__icon">
+        {% if ps.delta <= -1.5 %}📉{% elif ps.delta >= 1.5 %}📈{% else %}➡️{% endif %}
+      </span>
+      <div>
+        <strong>Pressure tendency:</strong>
+        {% if ps.delta > 0 %}+{% endif %}{{ ps.delta }} hPa (3h)
+        <span class="aw-pressure-signal__label">— {{ ps.label }}</span>
+      </div>
+    </div>
+    {% endwith %}
+  {% endif %}
+
+  {# ── Dew-point depression badge ───────────────────────────────── #}
+  {% if forecast.dew_signal and forecast.dew_signal.depression != None %}
+    {% with ds=forecast.dew_signal %}
+    <div class="aw-dew-signal
+      {% if ds.rain_mod >= 0.3 %}aw-pressure-signal--fall
+      {% elif ds.rain_mod <= -0.05 %}aw-pressure-signal--rise
+      {% else %}aw-pressure-signal--steady{% endif %}">
+      <span class="aw-pressure-signal__icon">💧</span>
+      <div>
+        <strong>Dew-point depression:</strong> {{ ds.depression }}°C
+        <span class="aw-pressure-signal__label">— {{ ds.label }}</span>
+      </div>
+    </div>
+    {% endwith %}
+  {% endif %}
+
+  {# ── 6-hour summary cards ─────────────────────────────────────── #}
+  {% if forecast_cards %}
+  <div class="aw-forecast-cards">
+    {% for card in forecast_cards %}
+      <div class="aw-forecast-card aw-forecast-card--{{ card.level }}">
+        <div class="aw-forecast-card__label">{{ card.label }}</div>
+        <div class="aw-forecast-card__icon">{{ card.icon }}</div>
+        <div class="aw-forecast-card__temp">{{ card.temp }}°C</div>
+        {% if card.humidity %}<div class="aw-forecast-card__humid">💧 {{ card.humidity|floatformat:0 }}%</div>{% endif %}
+        <div class="aw-forecast-card__rain">
+          <div class="aw-rain-bar">
+            <div class="aw-rain-bar__fill aw-rain-bar__fill--{{ card.level }}"
+                 style="width:{{ card.rain_pct }}%"></div>
+          </div>
+          <span class="aw-forecast-card__rain-pct">{{ card.rain_pct }}%</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── 24h forecast chart ───────────────────────────────────────── #}
+  <div class="aw-chart-wrap" style="margin-top:1rem;">
+    <div class="aw-chart-tabs" id="forecast-tabs">
+      <button class="aw-chart-tab active" onclick="showForecastChart('fc-temp', this)">Temperature</button>
+      <button class="aw-chart-tab" onclick="showForecastChart('fc-rain', this)">Rain Probability</button>
+      <button class="aw-chart-tab" onclick="showForecastChart('fc-humid', this)">Humidity</button>
+      <button class="aw-chart-tab" onclick="showForecastChart('fc-pres', this)">Pressure</button>
+    </div>
+    <div style="position:relative;height:220px;">
+      <canvas id="fc-temp"></canvas>
+      <canvas id="fc-rain"  style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+      <canvas id="fc-humid" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+      <canvas id="fc-pres"  style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<style>
+/* ═══════════════════════════════════════════════════
+   Forecast Panel Styles
+═══════════════════════════════════════════════════ */
+.aw-forecast-panel {
+  background: var(--aw-white);
+  border: 1px solid var(--aw-border);
+  border-radius: var(--aw-radius);
+  box-shadow: var(--aw-shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.aw-forecast-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 1rem;
+}
+
+.aw-forecast-panel__meta {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.aw-forecast-panel__basis {
+  font-size: .75rem;
+  color: var(--aw-muted);
+}
+
+.aw-forecast-confidence {
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .2rem .65rem;
+  border-radius: 99px;
+  letter-spacing: .02em;
+}
+.aw-forecast-confidence--high   { background: #dcfce7; color: #166534; }
+.aw-forecast-confidence--medium { background: #fef3c7; color: #92400e; }
+.aw-forecast-confidence--low    { background: #f1f5f9; color: #64748b; }
+
+/* Outlook banner */
+.aw-forecast-outlook {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+  background: var(--aw-surface);
+  border-radius: 10px;
+  padding: .9rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.aw-forecast-outlook__icon { font-size: 1.75rem; line-height: 1; flex-shrink: 0; }
+.aw-forecast-outlook__text { font-weight: 500; font-size: .92rem; color: var(--aw-text); }
+.aw-forecast-outlook__trend { font-size: .78rem; color: var(--aw-muted); margin-top: .25rem; }
+
+/* Pressure / dew signal bars */
+.aw-pressure-signal, .aw-dew-signal {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .6rem 1rem;
+  border-radius: 8px;
+  font-size: .82rem;
+  margin-bottom: .6rem;
+  border-left: 3px solid;
+}
+.aw-pressure-signal--fall   { background: #eff6ff; border-color: var(--aw-rain); color: #1e40af; }
+.aw-pressure-signal--rise   { background: #f0fdf4; border-color: var(--aw-green); color: #166534; }
+.aw-pressure-signal--steady { background: var(--aw-surface); border-color: var(--aw-border); color: var(--aw-muted); }
+.aw-pressure-signal__icon   { font-size: 1rem; flex-shrink: 0; }
+.aw-pressure-signal__label  { color: var(--aw-muted); }
+
+/* 6h summary cards */
+.aw-forecast-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .75rem;
+  margin: 1rem 0;
+}
+@media (max-width: 600px) { .aw-forecast-cards { grid-template-columns: repeat(2, 1fr); } }
+
+.aw-forecast-card {
+  background: var(--aw-surface);
+  border: 1px solid var(--aw-border);
+  border-radius: 10px;
+  padding: .9rem .75rem;
+  text-align: center;
+  transition: box-shadow .2s;
+}
+.aw-forecast-card:hover { box-shadow: var(--aw-shadow-md); }
+.aw-forecast-card--heavy    { border-color: #93c5fd; background: #eff6ff; }
+.aw-forecast-card--moderate { border-color: #bfdbfe; background: #f0f9ff; }
+
+.aw-forecast-card__label { font-size: .7rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--aw-muted); margin-bottom: .4rem; }
+.aw-forecast-card__icon  { font-size: 1.6rem; line-height: 1; margin-bottom: .35rem; }
+.aw-forecast-card__temp  { font-family: 'Instrument Serif', serif; font-size: 1.4rem; color: var(--aw-text); line-height: 1; }
+.aw-forecast-card__humid { font-size: .75rem; color: var(--aw-muted); margin-top: .25rem; }
+.aw-forecast-card__rain  { margin-top: .5rem; display: flex; align-items: center; gap: .4rem; }
+.aw-forecast-card__rain-pct { font-size: .72rem; color: var(--aw-muted); white-space: nowrap; }
+
+/* Rain probability bar */
+.aw-rain-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--aw-border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.aw-rain-bar__fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .4s ease;
+}
+.aw-rain-bar__fill--heavy    { background: #3b82f6; }
+.aw-rain-bar__fill--moderate { background: #60a5fa; }
+.aw-rain-bar__fill--light    { background: #93c5fd; }
+.aw-rain-bar__fill--none     { background: #cbd5e1; }
+</style>
+
+<script>
+(function() {
+  const fc = {{ forecast_json|safe }};
+  if (!fc) return;
+
+  const labels = fc.forecast_hours.map(h => {
+    const d = new Date(h);
+    return d.getHours() + ':00';
+  });
+
+  const CHART_OPTS = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode: 'index', intersect: false }
+    },
+    scales: {
+      x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99', maxTicksLimit: 12 } },
+      y: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' } }
+    }
+  };
+
+  function makeForecastLine(id, data, color, label, unit, dashed) {
+    const ctx = document.getElementById(id);
+    if (!ctx) return;
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label,
+          data,
+          borderColor: color,
+          backgroundColor: color + '15',
+          borderWidth: dashed ? 1.5 : 2,
+          borderDash: dashed ? [5, 4] : [],
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: true,
+          tension: 0.45,
+        }]
+      },
+      options: {
+        ...CHART_OPTS,
+        plugins: {
+          ...CHART_OPTS.plugins,
+          tooltip: {
+            ...CHART_OPTS.plugins.tooltip,
+            callbacks: { label: ctx => `${ctx.parsed.y}${unit}` }
+          }
+        }
+      }
+    });
+  }
+
+  // Temperature forecast — dashed to show it's a projection
+  makeForecastLine('fc-temp',  fc.temperature,      '#2d6be4', 'Forecast Temp', '°C', true);
+  // Rain probability — bar-style makes it clearer
+  new Chart(document.getElementById('fc-rain'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Rain probability',
+        data: fc.rain_probability.map(p => Math.round(p * 100)),
+        backgroundColor: fc.rain_probability.map(p =>
+          p >= 0.6 ? '#3b82f6' : p >= 0.35 ? '#60a5fa' : p >= 0.2 ? '#93c5fd' : '#dbeafe'
+        ),
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      ...CHART_OPTS,
+      scales: {
+        ...CHART_OPTS.scales,
+        y: { ...CHART_OPTS.scales.y, min: 0, max: 100,
+             ticks: { ...CHART_OPTS.scales.y.ticks, callback: v => v + '%' } }
+      }
+    }
+  });
+  makeForecastLine('fc-humid', fc.humidity,         '#60a5fa', 'Forecast Humidity', '%', true);
+  makeForecastLine('fc-pres',  fc.pressure,         '#8b5cf6', 'Forecast Pressure', ' hPa', true);
+
+  const forecastCanvases = ['fc-temp','fc-rain','fc-humid','fc-pres'];
+  window.showForecastChart = function(name, btn) {
+    forecastCanvases.forEach(c => {
+      const el = document.getElementById(c);
+      if (el) el.style.display = (c === name) ? 'block' : 'none';
+    });
+    document.querySelectorAll('#forecast-tabs .aw-chart-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  };
+})();
+</script>
+
+{% else %}
+  {# Graceful degradation when there's not enough data #}
+  <div class="aw-card" style="text-align:center;padding:2rem;color:var(--aw-muted);">
+    <div style="font-size:2rem;margin-bottom:.5rem;">📊</div>
+    <p style="font-size:.88rem;">Not enough data for forecasting yet.<br>Forecast will appear once at least 3 hours of readings are collected.</p>
+  </div>
+{% endif %}

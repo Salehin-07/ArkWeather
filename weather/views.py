@@ -12,6 +12,12 @@ import uuid
 
 from .models import Device, WeatherReading, District, DistrictAggregate
 from .forms import DeviceRegisterForm, DeviceEditForm
+from .forecasting import (
+    build_district_forecast,
+    build_device_forecast,
+    forecast_to_summary_cards,
+    pressure_tendency,
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -50,11 +56,12 @@ def district_detail(request, district_id):
     - 7-day trend
     - Rain forecast signal (pressure drop + rain %)
     - Active device map markers
+    - Holt-Winters 24-hour forecast
     """
     district = get_object_or_404(District, pk=district_id)
     now = timezone.now()
 
-    # ── Latest snapshot (most recent aggregate hour) ─────────────────────────
+    # ── Latest snapshot ───────────────────────────────────────────────────────
     latest = district.aggregates.first()
 
     # ── 24-hour chart data ────────────────────────────────────────────────────
@@ -78,7 +85,6 @@ def district_detail(request, district_id):
                 'avg_pressure', 'rain_percentage')
     )
 
-    # Group by date
     from collections import defaultdict
     daily_buckets = defaultdict(list)
     for row in daily_7d_raw:
@@ -87,8 +93,8 @@ def district_detail(request, district_id):
 
     daily_7d = []
     for day_key, rows in sorted(daily_buckets.items()):
-        def safe_avg(field):
-            vals = [r[field] for r in rows if r[field] is not None]
+        def safe_avg(field, _rows=rows):
+            vals = [r[field] for r in _rows if r[field] is not None]
             return round(sum(vals) / len(vals), 2) if vals else None
 
         daily_7d.append({
@@ -99,40 +105,57 @@ def district_detail(request, district_id):
             'rain_percentage': safe_avg('rain_percentage'),
         })
 
-    # ── Active devices (for map) ───────────────────────────────────────────────
-    active_devices = (
+    # ── Active devices ────────────────────────────────────────────────────────
+    active_devices = list(
         district.devices
         .filter(status='online', latitude__isnull=False, longitude__isnull=False)
         .values('name', 'latitude', 'longitude', 'last_seen', 'location_note')
     )
 
-    # ── Rain forecast signal ───────────────────────────────────────────────────
+    # ── Legacy rain alert (for backwards compat) ──────────────────────────────
     rain_alert = _compute_rain_signal(hourly_24h)
 
+    # ── FORECASTING ───────────────────────────────────────────────────────────
+    # Use last 48h of data for richer Holt-Winters initialisation
+    since_48h = now - timedelta(hours=48)
+    hourly_for_forecast = list(
+        district.aggregates
+        .filter(hour__gte=since_48h)
+        .order_by('hour')
+        .values('hour', 'avg_temperature', 'avg_humidity',
+                'avg_pressure', 'rain_percentage', 'avg_heat_index', 'avg_light')
+    )
+
+    forecast = build_district_forecast(hourly_for_forecast, steps=24)
+    forecast_cards = forecast_to_summary_cards(forecast) if forecast else []
+
     context = {
-        'district':      district,
-        'latest':        latest,
-        'hourly_24h':    json.dumps(hourly_24h, default=str),
-        'daily_7d':      json.dumps(daily_7d,   default=str),
-        'active_devices': json.dumps(list(active_devices), default=str),
-        'rain_alert':    rain_alert,
-        'device_count':  district.devices.filter(status='online').count(),
+        'district':          district,
+        'latest':            latest,
+        'hourly_24h':        json.dumps(hourly_24h, default=str),
+        'daily_7d':          json.dumps(daily_7d, default=str),
+        'active_devices':    json.dumps(active_devices, default=str),
+        'active_devices_list': active_devices,
+        'rain_alert':        rain_alert,
+        'device_count':      district.devices.filter(status='online').count(),
+
+        # Forecast
+        'forecast':          forecast,
+        'forecast_json':     json.dumps(forecast, default=str) if forecast else 'null',
+        'forecast_cards':    forecast_cards,
     }
     return render(request, 'weather/district_detail.html', context)
 
 
 def _compute_rain_signal(hourly_data):
     """
-    Simple rain forecast heuristic:
-    - Pressure dropped > 2 hPa over last 3 hours → possible rain
-    - rain_percentage > 50% in last reading → active rain
-    Returns a dict with level ('none','watch','warning') and message.
+    Simple rain forecast heuristic (legacy — kept for template compat).
     """
     if len(hourly_data) < 2:
         return {'level': 'none', 'message': 'Insufficient data'}
 
     recent = hourly_data[-1]
-    older  = hourly_data[max(0, len(hourly_data) - 4)]   # ~3h back
+    older  = hourly_data[max(0, len(hourly_data) - 4)]
 
     pressure_drop = None
     if recent.get('avg_pressure') and older.get('avg_pressure'):
@@ -174,12 +197,13 @@ def my_devices(request):
 def device_detail(request, device_uuid):
     """
     Per-device live dashboard for the owner.
-    Shows real-time readings + history charts for that specific node.
+    Shows real-time readings + history charts + Holt-Winters 12h forecast.
     """
     device = get_object_or_404(Device, device_id=device_uuid, owner=request.user)
 
     now = timezone.now()
     since_24h = now - timedelta(hours=24)
+    since_48h = now - timedelta(hours=48)
 
     latest_reading = device.readings.first()
 
@@ -191,11 +215,29 @@ def device_detail(request, device_uuid):
                 'rain_value', 'is_raining', 'light_value', 'heat_index', 'dew_point')
     )
 
+    # Use 48h of readings to give Holt-Winters more warm-up data
+    readings_48h_for_forecast = list(
+        device.readings
+        .filter(timestamp__gte=since_48h)
+        .order_by('timestamp')
+        .values('timestamp', 'temperature', 'humidity', 'pressure',
+                'rain_value', 'is_raining', 'heat_index', 'dew_point')
+    )
+
+    # ── Device forecast ───────────────────────────────────────────────────────
+    device_forecast = build_device_forecast(readings_48h_for_forecast, steps=12)
+    device_forecast_cards = forecast_to_summary_cards(device_forecast) if device_forecast else []
+
     context = {
-        'device':       device,
-        'latest':       latest_reading,
-        'readings_24h': json.dumps(readings_24h, default=str),
-        'api_key':      str(device.api_key),
+        'device':               device,
+        'latest':               latest_reading,
+        'readings_24h':         json.dumps(readings_24h, default=str),
+        'api_key':              str(device.api_key),
+
+        # Forecast
+        'forecast':             device_forecast,
+        'forecast_json':        json.dumps(device_forecast, default=str) if device_forecast else 'null',
+        'forecast_cards':       device_forecast_cards,
     }
     return render(request, 'weather/device_detail.html', context)
 
@@ -262,7 +304,6 @@ def api_push_reading(request):
     if not device:
         return JsonResponse({'error': 'Unknown device'}, status=401)
 
-    # Create weather reading safely
     reading = WeatherReading.objects.create(
         device=device,
         temperature=data.get('temperature'),
@@ -280,13 +321,10 @@ def api_push_reading(request):
         'reading_id': reading.pk
     }, status=201)
 
+
 @require_GET
 def api_latest_reading(request, device_uuid):
-    """
-    Polling endpoint for the device-owner live view.
-    Returns the most recent reading for a device.
-    Query param: ?api_key=<uuid>
-    """
+    """Polling endpoint for the device-owner live view."""
     api_key = request.GET.get('api_key')
     try:
         device = Device.objects.get(device_id=device_uuid, api_key=api_key)
@@ -314,10 +352,7 @@ def api_latest_reading(request, device_uuid):
 
 @require_GET
 def api_district_latest(request, district_id):
-    """
-    Public API — returns latest aggregate for a district.
-    Used by external consumers and the BLE bridge if needed.
-    """
+    """Public API — returns latest aggregate + basic forecast for a district."""
     district = get_object_or_404(District, pk=district_id)
     agg = district.aggregates.first()
     if not agg:
@@ -336,17 +371,10 @@ def api_district_latest(request, district_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  BLE PAIRING VIEW  (progressive enhancement — WiFi first, BLE experimental)
+#  BLE PAIRING VIEW
 # ══════════════════════════════════════════════════════════════════════════════
 
 @login_required
 def ble_pair(request):
-    """
-    Browser-side BLE pairing page.
-    Uses the Web Bluetooth API (Chrome/Edge only).
-    The page JS scans for ESP32 advertising 'ArkWeather' service,
-    reads the characteristic and displays live data.
-    Optionally binds the BLE device to an existing registered device record.
-    """
     devices = request.user.devices.all()
     return render(request, 'weather/ble_pair.html', {'devices': devices})

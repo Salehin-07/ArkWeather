@@ -1,0 +1,9 @@
+{
+  "wifi_ssid": "",
+  "wifi_password": "",
+  "api_key": "YOUR_DEVICE_API_KEY_HERE",
+  "server_url": "https://arkweather.onrender.com/api/push/",
+  "device_name": "ArkWeather-Node",
+  "push_interval": 60
+}
+

@@ -7,62 +7,50 @@
 {% include "weather/aw_base.css.html" %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  .live-grid {
+  .dev-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+    align-items: start;
   }
-  .live-card {
-    background: var(--aw-white);
-    border: 1px solid var(--aw-border);
-    border-radius: var(--aw-radius);
-    padding: 1.1rem 1.2rem;
-    box-shadow: var(--aw-shadow);
-    transition: border-color .3s;
-  }
-  .live-card.updated { border-color: var(--aw-accent); }
-  .live-card__icon { font-size: 1.3rem; margin-bottom: .5rem; }
-  .live-card__label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--aw-muted); margin-bottom: .3rem; }
-  .live-card__value { font-family: 'Instrument Serif', serif; font-size: 1.9rem; line-height: 1; color: var(--aw-text); }
-  .live-card__unit  { font-size: .9rem; color: var(--aw-muted); font-family: 'DM Sans', sans-serif; }
+  @media(max-width:860px) { .dev-grid { grid-template-columns: 1fr; } }
+  .dev-sidebar > * + * { margin-top: 1rem; }
 
-  .api-key-box {
+  /* API key reveal */
+  .aw-apikey-wrap {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
     background: var(--aw-surface);
     border: 1px solid var(--aw-border);
     border-radius: 8px;
-    padding: .6rem 1rem;
+    padding: .5rem .75rem;
+    margin-top: .5rem;
+  }
+  .aw-apikey-val {
     font-family: monospace;
     font-size: .82rem;
-    color: var(--aw-muted);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .5rem;
-    word-break: break-all;
-  }
-  .api-key-box button {
-    background: var(--aw-accent-lt);
-    border: none;
-    color: var(--aw-accent);
-    padding: .25rem .6rem;
-    border-radius: 6px;
+    color: var(--aw-text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    filter: blur(4px);
+    transition: filter .2s;
     cursor: pointer;
-    font-size: .75rem;
+    user-select: all;
+  }
+  .aw-apikey-val.revealed { filter: none; }
+  .aw-apikey-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: .78rem;
+    color: var(--aw-accent);
     font-family: 'DM Sans', sans-serif;
-    flex-shrink: 0;
-    transition: background .15s;
+    padding: 0;
+    white-space: nowrap;
   }
-  .api-key-box button:hover { background: #d1e3fc; }
-
-  .status-row {
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
-  #last-updated { font-size: .8rem; color: var(--aw-muted); }
 </style>
 {% endblock %}
 
@@ -70,8 +58,6 @@
 <div class="aw-page-header">
   <div style="max-width:1200px;margin:0 auto;">
     <div class="aw-breadcrumb">
-      <a href="{% url 'weather:home' %}">Home</a>
-      <span>›</span>
       <a href="{% url 'weather:my_devices' %}">My Devices</a>
       <span>›</span>
       <span>{{ device.name }}</span>
@@ -80,12 +66,16 @@
       <div>
         <h1>{{ device.name }}</h1>
         <p>
-          {% if device.district %}📍 {{ device.district.name }}{% endif %}
-          {% if device.location_note %} · {{ device.location_note }}{% endif %}
+          {% if device.district %}{{ device.district.name }} · {% endif %}
+          {% if device.location_note %}{{ device.location_note }} · {% endif %}
+          <span class="aw-badge aw-badge--{{ device.status }}">
+            <span class="aw-dot {% if device.status == 'online' %}aw-dot--green{% else %}aw-dot--grey{% endif %}"></span>
+            {{ device.status|capfirst }}
+          </span>
         </p>
       </div>
-      <div style="display:flex;gap:.6rem;">
-        <a href="{% url 'weather:edit_device' device.device_id %}" class="aw-btn aw-btn--ghost aw-btn--sm">Edit</a>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        <a href="{% url 'weather:edit_device' device.device_id %}" class="aw-btn aw-btn--outline aw-btn--sm">Edit</a>
         <a href="{% url 'weather:delete_device' device.device_id %}" class="aw-btn aw-btn--danger aw-btn--sm">Delete</a>
       </div>
     </div>
@@ -94,136 +84,161 @@
 
 <div class="aw-container">
 
-  <div class="status-row aw-fade">
-    <span id="status-badge" class="aw-badge {% if device.status == 'online' %}aw-badge--online{% else %}aw-badge--offline{% endif %}">
-      <span class="aw-dot {% if device.status == 'online' %}aw-dot--green{% else %}aw-dot--grey{% endif %}"></span>
-      {{ device.get_status_display }}
-    </span>
-    <span id="last-updated">
-      {% if device.last_seen %}Last seen {{ device.last_seen|timesince }} ago{% else %}Never connected{% endif %}
-    </span>
-    {% if device.firmware_version %}
-      <span style="font-size:.78rem;background:var(--aw-surface2);padding:.2rem .6rem;border-radius:99px;color:var(--aw-muted);">fw {{ device.firmware_version }}</span>
-    {% endif %}
-  </div>
+  <!-- Live stats -->
+  {% if latest %}
+    <h2 class="aw-section-title aw-fade">
+      Live Reading
+      <span class="aw-live-dot" style="margin-left:.25rem;"></span>
+    </h2>
+    <div class="aw-stat-grid aw-fade aw-fade-1" style="margin-bottom:2rem;">
 
-  <!-- Live sensor cards -->
-  <div class="live-grid aw-fade aw-fade-1">
-    <div class="live-card" id="card-temp">
-      <div class="live-card__icon">🌡️</div>
-      <div class="live-card__label">Temperature</div>
-      <div class="live-card__value" id="val-temp">
-        {% if latest and latest.temperature is not None %}{{ latest.temperature|floatformat:1 }}{% else %}—{% endif %}
-        <span class="live-card__unit">{% if latest and latest.temperature is not None %}°C{% endif %}</span>
-      </div>
-    </div>
-    <div class="live-card" id="card-hum">
-      <div class="live-card__icon">💧</div>
-      <div class="live-card__label">Humidity</div>
-      <div class="live-card__value" id="val-hum">
-        {% if latest and latest.humidity is not None %}{{ latest.humidity|floatformat:0 }}{% else %}—{% endif %}
-        <span class="live-card__unit">{% if latest and latest.humidity is not None %}%{% endif %}</span>
-      </div>
-    </div>
-    <div class="live-card" id="card-pres">
-      <div class="live-card__icon">🔵</div>
-      <div class="live-card__label">Pressure</div>
-      <div class="live-card__value" id="val-pres">
-        {% if latest and latest.pressure is not None %}{{ latest.pressure|floatformat:0 }}{% else %}—{% endif %}
-        <span class="live-card__unit">{% if latest and latest.pressure is not None %}hPa{% endif %}</span>
-      </div>
-    </div>
-    <div class="live-card" id="card-rain">
-      <div class="live-card__icon">🌧</div>
-      <div class="live-card__label">Rain</div>
-      <div class="live-card__value" id="val-rain">
-        {% if latest and latest.is_raining is not None %}{% if latest.is_raining %}Yes{% else %}No{% endif %}{% else %}—{% endif %}
-      </div>
-    </div>
-    <div class="live-card" id="card-hi">
-      <div class="live-card__icon">🌡</div>
-      <div class="live-card__label">Feels Like</div>
-      <div class="live-card__value" id="val-hi">
-        {% if latest and latest.heat_index is not None %}{{ latest.heat_index|floatformat:1 }}{% else %}—{% endif %}
-        <span class="live-card__unit">{% if latest and latest.heat_index is not None %}°C{% endif %}</span>
-      </div>
-    </div>
-    <div class="live-card" id="card-dew">
-      <div class="live-card__icon">🌫️</div>
-      <div class="live-card__label">Dew Point</div>
-      <div class="live-card__value" id="val-dew">
-        {% if latest and latest.dew_point is not None %}{{ latest.dew_point|floatformat:1 }}{% else %}—{% endif %}
-        <span class="live-card__unit">{% if latest and latest.dew_point is not None %}°C{% endif %}</span>
-      </div>
-    </div>
-    <div class="live-card" id="card-light">
-      <div class="live-card__icon">☀️</div>
-      <div class="live-card__label">Light</div>
-      <div class="live-card__value" id="val-light">
-        {% if latest and latest.light_value is not None %}{{ latest.light_value }}{% else %}—{% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- 24h chart -->
-  <h2 class="aw-section-title aw-fade aw-fade-2">24-Hour History</h2>
-  <div class="aw-chart-wrap aw-fade aw-fade-2" style="margin-bottom:2rem;">
-    <div class="aw-chart-tabs">
-      <button class="aw-chart-tab active" onclick="showDevChart('dtemp', this)">Temperature</button>
-      <button class="aw-chart-tab" onclick="showDevChart('dhum', this)">Humidity</button>
-      <button class="aw-chart-tab" onclick="showDevChart('dpres', this)">Pressure</button>
-      <button class="aw-chart-tab" onclick="showDevChart('drain', this)">Rain</button>
-    </div>
-    <div style="position:relative;height:240px;">
-      <canvas id="chart-dtemp"></canvas>
-      <canvas id="chart-dhum"  style="display:none;position:absolute;top:0;left:0;"></canvas>
-      <canvas id="chart-dpres" style="display:none;position:absolute;top:0;left:0;"></canvas>
-      <canvas id="chart-drain" style="display:none;position:absolute;top:0;left:0;"></canvas>
-    </div>
-  </div>
-
-  <!-- API key + ESP32 setup -->
-  <h2 class="aw-section-title aw-fade aw-fade-3">ESP32 Setup</h2>
-  <div class="aw-card aw-fade aw-fade-3" style="margin-bottom:2rem;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;flex-wrap:wrap;">
-      <div>
-        <div class="aw-form__label">Device ID (UUID)</div>
-        <div class="api-key-box">
-          <span>{{ device.device_id }}</span>
-          <button onclick="copyText('{{ device.device_id }}', this)">Copy</button>
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#fef3c7;">🌡️</div>
+        <div class="aw-card__title">Temperature</div>
+        <div class="aw-card__value" id="live-temp">
+          {% if latest.temperature %}{{ latest.temperature|floatformat:1 }}<span class="aw-card__unit">°C</span>{% else %}—{% endif %}
         </div>
       </div>
-      <div>
-        <div class="aw-form__label">API Key (flash to ESP32)</div>
-        <div class="api-key-box">
-          <span id="api-key-display">{{ api_key }}</span>
-          <button onclick="copyText('{{ api_key }}', this)">Copy</button>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#e0f2fe;">💧</div>
+        <div class="aw-card__title">Humidity</div>
+        <div class="aw-card__value" id="live-humid">
+          {% if latest.humidity %}{{ latest.humidity|floatformat:0 }}<span class="aw-card__unit">%</span>{% else %}—{% endif %}
+        </div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#ede9fe;">🔵</div>
+        <div class="aw-card__title">Pressure</div>
+        <div class="aw-card__value" id="live-pressure">
+          {% if latest.pressure %}{{ latest.pressure|floatformat:1 }}<span class="aw-card__unit">hPa</span>{% else %}—{% endif %}
+        </div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#dbeafe;">🌧</div>
+        <div class="aw-card__title">Rain</div>
+        <div class="aw-card__value" id="live-rain"
+             style="{% if latest.is_raining %}color:var(--aw-rain){% endif %}">
+          {% if latest.is_raining %}Raining{% else %}Dry{% endif %}
+        </div>
+        <div class="aw-card__sub">Raw: {% if latest.rain_value %}{{ latest.rain_value }}{% else %}—{% endif %}</div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#fce7f3;">🌡️</div>
+        <div class="aw-card__title">Heat Index</div>
+        <div class="aw-card__value" id="live-hi">
+          {% if latest.heat_index %}{{ latest.heat_index|floatformat:1 }}<span class="aw-card__unit">°C</span>{% else %}—{% endif %}
+        </div>
+      </div>
+
+      <div class="aw-card">
+        <div class="aw-card__icon" style="background:#f0fdf4;">🌡️</div>
+        <div class="aw-card__title">Dew Point</div>
+        <div class="aw-card__value" id="live-dew">
+          {% if latest.dew_point %}{{ latest.dew_point|floatformat:1 }}<span class="aw-card__unit">°C</span>{% else %}—{% endif %}
+        </div>
+      </div>
+
+    </div>
+  {% endif %}
+
+  <!-- ═══════════ FORECAST PANEL ═══════════ -->
+  <h2 class="aw-section-title aw-fade aw-fade-2">Forecast</h2>
+  {% with forecast_title="12-Hour Forecast — Holt-Winters + Dew-Point Analysis" %}
+    {% include "weather/forecast_panel.html" %}
+  {% endwith %}
+
+  <!-- Main grid: charts + sidebar -->
+  <div class="dev-grid">
+
+    <!-- History charts -->
+    <div>
+      <h2 class="aw-section-title aw-fade aw-fade-3">24-Hour History</h2>
+      <div class="aw-chart-wrap aw-fade aw-fade-3" style="margin-bottom:1.25rem;">
+        <div class="aw-chart-tabs">
+          <button class="aw-chart-tab active" onclick="showDevChart('dv-temp', this)">Temperature</button>
+          <button class="aw-chart-tab" onclick="showDevChart('dv-humid', this)">Humidity</button>
+          <button class="aw-chart-tab" onclick="showDevChart('dv-pres', this)">Pressure</button>
+          <button class="aw-chart-tab" onclick="showDevChart('dv-rain', this)">Rain</button>
+        </div>
+        <div style="position:relative;height:260px;">
+          <canvas id="dv-temp"></canvas>
+          <canvas id="dv-humid" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+          <canvas id="dv-pres"  style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+          <canvas id="dv-rain"  style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
         </div>
       </div>
     </div>
-    <div style="margin-top:1.25rem;padding:1rem;background:var(--aw-surface);border-radius:8px;">
-      <div style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--aw-muted);margin-bottom:.6rem;">Arduino Sketch Config</div>
-      <pre style="font-size:.78rem;color:var(--aw-text);line-height:1.7;overflow-x:auto;"><code>const char* SERVER_URL = "https://yourdomain.com/api/push/";
-const char* API_KEY    = "{{ api_key }}";</code></pre>
+
+    <!-- Sidebar -->
+    <div class="dev-sidebar aw-fade aw-fade-4">
+
+      <!-- API key -->
+      <div class="aw-card">
+        <div class="aw-card__title">API Key</div>
+        <div class="aw-apikey-wrap">
+          <span class="aw-apikey-val" id="apikey-val" title="Click to reveal">{{ api_key }}</span>
+          <button class="aw-apikey-btn" onclick="revealKey()">Show</button>
+          <button class="aw-apikey-btn" onclick="copyKey()">Copy</button>
+        </div>
+        <p style="font-size:.75rem;color:var(--aw-muted);margin-top:.5rem;">
+          Include as <code>api_key</code> in your ESP32 JSON payload.
+        </p>
+      </div>
+
+      <!-- Device info -->
+      <div class="aw-card" style="background:var(--aw-surface);">
+        <div class="aw-card__title">Device info</div>
+        <table style="width:100%;font-size:.82rem;margin-top:.5rem;border-collapse:collapse;">
+          <tr>
+            <td style="color:var(--aw-muted);padding:.25rem 0;">UUID</td>
+            <td style="font-family:monospace;font-size:.75rem;word-break:break-all;">{{ device.device_id }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--aw-muted);padding:.25rem 0;">District</td>
+            <td>{% if device.district %}{{ device.district.name }}{% else %}—{% endif %}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--aw-muted);padding:.25rem 0;">Last seen</td>
+            <td id="last-seen">{% if device.last_seen %}{{ device.last_seen|timesince }} ago{% else %}Never{% endif %}</td>
+          </tr>
+          {% if device.latitude and device.longitude %}
+          <tr>
+            <td style="color:var(--aw-muted);padding:.25rem 0;">GPS</td>
+            <td>{{ device.latitude }}, {{ device.longitude }}</td>
+          </tr>
+          {% endif %}
+        </table>
+      </div>
+
+      <!-- Methodology -->
+      <div class="aw-card" style="background:var(--aw-surface);">
+        <div class="aw-card__title">Forecast methodology</div>
+        <p style="font-size:.82rem;color:var(--aw-muted);line-height:1.65;margin-top:.4rem;">
+          Individual device readings are <strong style="color:var(--aw-text);">hourly-bucketed</strong> to reduce sensor noise, then fed into <strong style="color:var(--aw-text);">Holt-Winters double exponential smoothing</strong>. A sinusoidal diurnal correction is applied to temperature. Rain probability combines sensor rain detection, WMO 3-h pressure tendency, and dew-point depression.
+        </p>
+      </div>
+
     </div>
   </div>
-
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const readings = {{ readings_24h|safe }};
-const apiKey   = '{{ api_key }}';
-const deviceUuid = '{{ device.device_id }}';
+const readings24h = {{ readings_24h|safe }};
 
-const labels = readings.map(r => {
+const labels = readings24h.map(r => {
   const d = new Date(r.timestamp);
-  return d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+  return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
 });
 
-const OPT = {
-  responsive: true, maintainAspectRatio: false,
+const CHART_OPTS = {
+  responsive: true,
+  maintainAspectRatio: false,
   plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
   scales: {
     x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99', maxTicksLimit: 12 } },
@@ -231,93 +246,106 @@ const OPT = {
   }
 };
 
-function makeLine(id, data, color, unit) {
+function makeDevLine(id, data, color, unit) {
   new Chart(document.getElementById(id), {
     type: 'line',
     data: {
       labels,
-      datasets: [{ data, borderColor: color, backgroundColor: color+'18', borderWidth: 2,
-                   pointRadius: 1.5, pointHoverRadius: 4, fill: true, tension: 0.35 }]
+      datasets: [{
+        data,
+        borderColor: color,
+        backgroundColor: color + '18',
+        borderWidth: 1.8,
+        pointRadius: 1,
+        pointHoverRadius: 4,
+        fill: true,
+        tension: 0.35,
+      }]
     },
-    options: { ...OPT, plugins: { ...OPT.plugins, tooltip: { ...OPT.plugins.tooltip,
-      callbacks: { label: ctx => `${ctx.parsed.y}${unit}` } } } }
+    options: {
+      ...CHART_OPTS,
+      plugins: {
+        ...CHART_OPTS.plugins,
+        tooltip: {
+          ...CHART_OPTS.plugins.tooltip,
+          callbacks: { label: ctx => `${ctx.parsed.y}${unit}` }
+        }
+      }
+    }
   });
 }
 
-makeLine('chart-dtemp', readings.map(r => r.temperature), '#2d6be4', '°C');
-makeLine('chart-dhum',  readings.map(r => r.humidity),    '#60a5fa', '%');
-makeLine('chart-dpres', readings.map(r => r.pressure),    '#8b5cf6', ' hPa');
+makeDevLine('dv-temp',  readings24h.map(r => r.temperature), '#2d6be4', '°C');
+makeDevLine('dv-humid', readings24h.map(r => r.humidity),    '#60a5fa', '%');
+makeDevLine('dv-pres',  readings24h.map(r => r.pressure),    '#8b5cf6', ' hPa');
 
-// Rain as step line
-new Chart(document.getElementById('chart-drain'), {
-  type: 'line',
+// Rain as bar chart
+new Chart(document.getElementById('dv-rain'), {
+  type: 'bar',
   data: {
     labels,
     datasets: [{
-      data: readings.map(r => r.is_raining === true ? 1 : r.is_raining === false ? 0 : null),
-      borderColor: '#0ea5e9', backgroundColor: '#0ea5e944',
-      borderWidth: 2, fill: true, stepped: true, pointRadius: 2
+      data: readings24h.map(r => r.rain_value),
+      backgroundColor: readings24h.map(r => r.is_raining ? '#3b82f6' : '#dbeafe'),
+      borderRadius: 2,
     }]
   },
-  options: { ...OPT, scales: { ...OPT.scales, y: { ...OPT.scales.y, min: 0, max: 1,
-    ticks: { callback: v => v === 1 ? 'Rain' : 'Dry', font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' } } } }
+  options: { ...CHART_OPTS }
 });
 
+// Tab switching
+const devCharts = ['dv-temp','dv-humid','dv-pres','dv-rain'];
 function showDevChart(name, btn) {
-  ['dtemp','dhum','dpres','drain'].forEach(c => {
-    document.getElementById('chart-' + c).style.display = (c === name) ? 'block' : 'none';
+  devCharts.forEach(c => {
+    const el = document.getElementById(c);
+    if (el) el.style.display = (c === name) ? 'block' : 'none';
   });
   document.querySelectorAll('.aw-chart-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 }
 
-// ── Live polling every 30s ──────────────────────────────────────────────────
-function flashCard(id) {
-  const el = document.getElementById(id);
-  el.classList.add('updated');
-  setTimeout(() => el.classList.remove('updated'), 1200);
+// API key reveal / copy
+function revealKey() {
+  const el = document.getElementById('apikey-val');
+  el.classList.toggle('revealed');
+  document.querySelector('.aw-apikey-btn').textContent = el.classList.contains('revealed') ? 'Hide' : 'Show';
+}
+function copyKey() {
+  const val = document.getElementById('apikey-val').textContent;
+  navigator.clipboard.writeText(val.trim()).then(() => {
+    const btn = document.querySelectorAll('.aw-apikey-btn')[1];
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1800);
+  });
 }
 
-function pollLatest() {
-  fetch(`/api/device/${deviceUuid}/latest/?api_key=${apiKey}`)
+// Live polling
+const DEVICE_UUID = '{{ device.device_id }}';
+const API_KEY = '{{ api_key }}';
+
+function pollLive() {
+  fetch(`/weather/api/device/${DEVICE_UUID}/latest/?api_key=${API_KEY}`)
     .then(r => r.json())
     .then(d => {
       if (d.status !== 'ok') return;
-      const map = {
-        'val-temp':  [d.temperature,  '°C',   'card-temp'],
-        'val-hum':   [d.humidity,     '%',    'card-hum'],
-        'val-pres':  [d.pressure,     ' hPa', 'card-pres'],
-        'val-hi':    [d.heat_index,   '°C',   'card-hi'],
-        'val-dew':   [d.dew_point,    '°C',   'card-dew'],
-        'val-light': [d.light_value,  '',     'card-light'],
-      };
-      Object.entries(map).forEach(([id, [val, unit, cardId]]) => {
+      const set = (id, val, unit='') => {
         const el = document.getElementById(id);
-        if (val !== null && val !== undefined) {
-          el.innerHTML = `${parseFloat(val).toFixed(1)}<span class="live-card__unit">${unit}</span>`;
-          flashCard(cardId);
-        }
-      });
-      // Rain
-      if (d.is_raining !== null && d.is_raining !== undefined) {
-        document.getElementById('val-rain').textContent = d.is_raining ? 'Yes' : 'No';
-        flashCard('card-rain');
+        if (el && val !== null && val !== undefined) el.innerHTML = parseFloat(val).toFixed(id.includes('pressure') ? 1 : 1) + `<span class="aw-card__unit">${unit}</span>`;
+      };
+      set('live-temp',     d.temperature, '°C');
+      set('live-humid',    d.humidity,    '%');
+      set('live-pressure', d.pressure,    ' hPa');
+      set('live-hi',       d.heat_index,  '°C');
+      set('live-dew',      d.dew_point,   '°C');
+      const rainEl = document.getElementById('live-rain');
+      if (rainEl) {
+        rainEl.textContent = d.is_raining ? 'Raining' : 'Dry';
+        rainEl.style.color = d.is_raining ? 'var(--aw-rain)' : '';
       }
-      document.getElementById('last-updated').textContent =
-        'Updated ' + new Date(d.timestamp).toLocaleTimeString();
     })
     .catch(() => {});
 }
-
-setInterval(pollLatest, 30000);
-
-// ── Copy helper ─────────────────────────────────────────────────────────────
-function copyText(text, btn) {
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = orig, 1500);
-  });
-}
+setInterval(pollLive, 30000);
 </script>
 {% endblock %}

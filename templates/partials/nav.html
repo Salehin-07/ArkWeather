@@ -2,13 +2,7 @@
 <nav class="aw-nav" role="navigation" aria-label="Main navigation">
 
   <a href="{% url 'weather:home' %}" class="aw-nav__brand">
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-      <circle cx="14" cy="14" r="14" fill="#e8effd"/>
-      <path d="M7 18c0-3.866 3.134-7 7-7a7 7 0 0 1 7 7" stroke="#2d6be4" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <circle cx="14" cy="10" r="2.5" fill="#2d6be4"/>
-      <path d="M9 21h10" stroke="#2d6be4" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M7 21c0 0 2-3 7-3s7 3 7 3" stroke="#60a5fa" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".6"/>
-    </svg>
+    <img src="{% static 'img/logo.png' %}" alt="ArkWeather" class="aw-nav__logo">
     Ark<span>Weather</span>
   </a>
 
@@ -24,7 +18,10 @@
 
     <!-- Mobile header inside menu -->
     <div class="aw-nav__mobile-header">
-      <span style="font-weight:600;font-size:1rem;color:var(--aw-text);">Ark<span style="color:var(--aw-accent);">Weather</span></span>
+      <span style="display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:1rem;color:var(--aw-text);">
+        <img src="{% static 'img/logo.png' %}" alt="" style="height:24px;width:24px;object-fit:contain;">
+        Ark<span style="color:var(--aw-accent);">Weather</span>
+      </span>
       <button class="aw-nav__close" id="aw-close" aria-label="Close menu">✕</button>
     </div>
 
@@ -84,7 +81,6 @@
 <style>
 /* ═══════════════════════════════════════════════
    ArkWeather — Responsive Nav
-   Mobile-first, drawer on small screens
 ═══════════════════════════════════════════════ */
 .aw-nav {
   background: var(--aw-white);
@@ -115,6 +111,15 @@
 }
 .aw-nav__brand span { color: var(--aw-accent); }
 
+/* Logo image */
+.aw-nav__logo {
+  height: 30px;
+  width: 30px;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+}
+
 /* ── Hamburger ─────────────────────────────── */
 .aw-nav__burger {
   display: none;
@@ -139,8 +144,6 @@
   transition: transform .25s ease, opacity .2s ease, width .2s ease;
   transform-origin: center;
 }
-
-/* Burger → X animation */
 .aw-nav__burger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
 .aw-nav__burger.open span:nth-child(2) { opacity: 0; width: 0; }
 .aw-nav__burger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
@@ -199,7 +202,6 @@
 
   .aw-nav__burger { display: flex; }
 
-  /* Slide-in drawer */
   .aw-nav__links {
     position: fixed;
     top: 0;
@@ -219,7 +221,6 @@
   }
   .aw-nav__links.open { right: 0; }
 
-  /* Mobile header row inside drawer */
   .aw-nav__mobile-header {
     display: flex;
     align-items: center;
@@ -246,7 +247,6 @@
   }
   .aw-nav__close:hover { background: var(--aw-border); }
 
-  /* Links become full-width rows */
   .aw-nav__link {
     padding: .8rem 1.25rem;
     border-radius: 0;
@@ -264,7 +264,6 @@
     font-size: .95rem;
   }
 
-  /* Divider */
   .aw-nav__divider {
     display: block;
     height: 1px;
@@ -272,7 +271,6 @@
     margin: .5rem 0;
   }
 
-  /* User pill */
   .aw-nav__user {
     display: flex;
     align-items: center;
@@ -301,11 +299,9 @@
     white-space: nowrap;
   }
 
-  /* Logout form fills full width */
   .aw-nav__link--logout { border-bottom: none; }
   form[action*="logout"] { display: block; }
 
-  /* Backdrop */
   .aw-nav__backdrop {
     display: block;
     position: fixed;
@@ -352,12 +348,10 @@
   close.addEventListener('click', closeMenu);
   backdrop.addEventListener('click', closeMenu);
 
-  // Close on Escape
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeMenu();
   });
 
-  // Close when a nav link is tapped (SPA-style feel)
   menu.querySelectorAll('a.aw-nav__link').forEach(link => {
     link.addEventListener('click', closeMenu);
   });

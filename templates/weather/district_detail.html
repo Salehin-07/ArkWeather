@@ -18,21 +18,6 @@
 
   .dd-sidebar > * + * { margin-top: 1rem; }
 
-  .pressure-indicator {
-    background: var(--aw-white);
-    border: 1px solid var(--aw-border);
-    border-radius: var(--aw-radius);
-    padding: 1.25rem;
-    text-align: center;
-    box-shadow: var(--aw-shadow);
-  }
-  .pressure-indicator__val {
-    font-family: 'Instrument Serif', serif;
-    font-size: 2.4rem;
-    color: var(--aw-text);
-    line-height: 1;
-  }
-
   .device-list { list-style: none; }
   .device-list li {
     display: flex;
@@ -154,12 +139,18 @@
     </div>
   {% endif %}
 
+  <!-- ═══════════ FORECAST PANEL ═══════════ -->
+  <h2 class="aw-section-title aw-fade aw-fade-2">Forecast</h2>
+  {% with forecast_title="24-Hour Forecast — Holt-Winters + Pressure Tendency" %}
+    {% include "weather/forecast_panel.html" %}
+  {% endwith %}
+
   <!-- Main grid: charts + sidebar -->
   <div class="dd-grid">
 
     <!-- Charts column -->
     <div>
-      <h2 class="aw-section-title aw-fade aw-fade-2">24-Hour Trends</h2>
+      <h2 class="aw-section-title aw-fade aw-fade-2">24-Hour Observed Trends</h2>
 
       <div class="aw-chart-wrap aw-fade aw-fade-2" style="margin-bottom:1.25rem;">
         <div class="aw-chart-tabs">
@@ -170,9 +161,9 @@
         </div>
         <div style="position:relative;height:260px;">
           <canvas id="chart-temp"></canvas>
-          <canvas id="chart-hum" style="display:none;position:absolute;top:0;left:0;"></canvas>
-          <canvas id="chart-pres" style="display:none;position:absolute;top:0;left:0;"></canvas>
-          <canvas id="chart-rain" style="display:none;position:absolute;top:0;left:0;"></canvas>
+          <canvas id="chart-hum"  style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+          <canvas id="chart-pres" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+          <canvas id="chart-rain" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
         </div>
       </div>
 
@@ -207,6 +198,17 @@
         {% endif %}
       </div>
 
+      <!-- Forecast methodology -->
+      <div class="aw-card" style="background:var(--aw-surface);">
+        <div class="aw-card__title">Forecast methodology</div>
+        <p style="font-size:.82rem;color:var(--aw-muted);line-height:1.65;margin-top:.4rem;">
+          Forecasts use <strong style="color:var(--aw-text);">Holt-Winters double exponential smoothing</strong> — the same family of algorithms used in commercial weather platforms — combined with WMO 3-hour pressure tendency rules and dew-point depression analysis. Diurnal correction is applied to temperature projections.
+        </p>
+        <p style="font-size:.82rem;color:var(--aw-muted);line-height:1.65;margin-top:.6rem;">
+          Rain probability blends station rain coverage, pressure tendency, and near-saturation signals.
+        </p>
+      </div>
+
       <!-- About this data -->
       <div class="aw-card" style="background:var(--aw-surface);">
         <div class="aw-card__title">About this data</div>
@@ -235,7 +237,7 @@ const CHART_DEFAULTS = {
   maintainAspectRatio: false,
   plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
   scales: {
-    x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 11 }, color: '#6b7a99' } },
+    x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 11 }, color: '#6b7a99', maxTicksLimit: 12 } },
     y: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 11 }, color: '#6b7a99' } }
   }
 };
@@ -270,13 +272,12 @@ function makeLineChart(canvasId, labels, data, color, label, unit) {
   });
 }
 
-// Build 24h charts
 makeLineChart('chart-temp',  labels24h, hourly.map(r => r.avg_temperature), '#2d6be4', 'Temperature', '°C');
 makeLineChart('chart-hum',   labels24h, hourly.map(r => r.avg_humidity),    '#60a5fa', 'Humidity', '%');
 makeLineChart('chart-pres',  labels24h, hourly.map(r => r.avg_pressure),    '#8b5cf6', 'Pressure', ' hPa');
 makeLineChart('chart-rain',  labels24h, hourly.map(r => r.rain_percentage), '#0ea5e9', 'Rain %', '%');
 
-// 7-day chart (temp + rain bar)
+// 7-day chart
 const labels7d = daily.map(r => {
   const d = new Date(r.date);
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -316,18 +317,19 @@ new Chart(document.getElementById('chart-7d'), {
       tooltip: { mode: 'index', intersect: false }
     },
     scales: {
-      x: { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' } },
-      y: { position: 'left',  grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' }, title: { display: true, text: '°C', font: { size: 10 }, color: '#6b7a99' } },
+      x:  { grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' } },
+      y:  { position: 'left',  grid: { color: '#eef2f8' }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' }, title: { display: true, text: '°C', font: { size: 10 }, color: '#6b7a99' } },
       y2: { position: 'right', grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 10 }, color: '#6b7a99' }, title: { display: true, text: 'Rain %', font: { size: 10 }, color: '#6b7a99' }, max: 100, min: 0 }
     }
   }
 });
 
-// Tab switching
+// Tab switching for observed charts
 const charts = ['temp','hum','pres','rain'];
 function showChart(name, btn) {
   charts.forEach(c => {
-    document.getElementById('chart-' + c).style.display = (c === name) ? 'block' : 'none';
+    const el = document.getElementById('chart-' + c);
+    if (el) el.style.display = (c === name) ? 'block' : 'none';
   });
   document.querySelectorAll('.aw-chart-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
