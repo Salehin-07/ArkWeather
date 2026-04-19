@@ -9,7 +9,7 @@ _DEFAULTS = {
     "wifi_ssid": "",
     "wifi_password": "",
     "api_key": "",
-    "server_url": "https://your-arkweather-domain.com/api/push/",
+    "server_url": "https://arkweather.onrender.com/api/push/",
     "device_name": "ArkWeather-Node",
     "push_interval": 60,
 }

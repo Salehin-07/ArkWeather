@@ -15,13 +15,12 @@ import time
 import socket
 import json
 
-CONNECT_TIMEOUT = 20   # seconds to wait for WiFi
+CONNECT_TIMEOUT = 20  
 AP_SSID         = "ArkWeather-Setup"
-AP_PASSWORD     = "arkweather"   # WPA2; at least 8 chars
+AP_PASSWORD     = "arkweather"   
 PORTAL_IP       = "192.168.4.1"
 
 
-# ── STA (station) connection ──────────────────────────────────────────────────
 
 def connect(ssid, password, timeout=CONNECT_TIMEOUT):
     """
@@ -58,7 +57,6 @@ def connect(ssid, password, timeout=CONNECT_TIMEOUT):
     return None, None
 
 
-# ── AP + Config Portal ────────────────────────────────────────────────────────
 
 _PORTAL_HTML = """\
 <!DOCTYPE html>
@@ -170,10 +168,8 @@ def _handle_request(client_sock, cfg, saved_flag):
             client_sock.sendall(resp.encode())
 
         elif method == "POST" and path == "/save":
-            # Find JSON body
             header_end = raw.find(b"\r\n\r\n")
             body_raw = raw[header_end + 4:]
-            # If body incomplete, read more
             content_length = 0
             for line in request.split("\r\n"):
                 if line.lower().startswith("content-length:"):
@@ -186,7 +182,6 @@ def _handle_request(client_sock, cfg, saved_flag):
 
             new_cfg = json.loads(body_raw.decode())
 
-            # Update config
             cfg["wifi_ssid"]      = new_cfg.get("ssid", "")
             cfg["wifi_password"]  = new_cfg.get("password", cfg.get("wifi_password", ""))
             cfg["server_url"]     = new_cfg.get("server_url", cfg.get("server_url", ""))
@@ -227,7 +222,6 @@ def start_ap_portal(cfg: dict, on_display=None):
     on_display(ssid, ip) is called so you can update the OLED.
     Returns updated cfg dict.
     """
-    # Disable STA
     try:
         sta = network.WLAN(network.STA_IF)
         sta.active(False)
@@ -255,12 +249,11 @@ def start_ap_portal(cfg: dict, on_display=None):
         except Exception:
             pass
 
-    # Start TCP server on port 80
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_sock.bind(("0.0.0.0", 80))
     server_sock.listen(3)
-    server_sock.settimeout(1)   # non-blocking so we can check saved_flag
+    server_sock.settimeout(1)   
 
     saved_flag = [False]
     print("[wifi] Config portal running at http://192.168.4.1")
@@ -271,7 +264,7 @@ def start_ap_portal(cfg: dict, on_display=None):
             print(f"[portal] connection from {addr}")
             _handle_request(client, cfg, saved_flag)
         except OSError:
-            pass   # timeout — loop again
+            pass   
         except Exception as e:
             print("[portal] error:", e)
 

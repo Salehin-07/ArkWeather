@@ -14,20 +14,17 @@ import json
 import time
 
 MAX_RETRIES    = 4
-RETRY_BASE_SEC = 2   # doubles each retry: 2, 4, 8, 16 s
+RETRY_BASE_SEC = 2  
 TIMEOUT_SEC    = 20
 
 
 def _post_urequests(url, headers, body, use_ssl=True):
     """Primary method: urequests (MicroPython built-in or frozen)."""
     import urequests
-    # urequests doesn't expose ssl kwarg on all builds;
-    # try both signatures
     try:
         r = urequests.post(url, headers=headers, data=body, timeout=TIMEOUT_SEC)
         return r.status_code, r.text
     except TypeError:
-        # older build without timeout
         r = urequests.post(url, headers=headers, data=body)
         return r.status_code, r.text
 
@@ -36,7 +33,6 @@ def _post_raw_ssl(url, headers, body):
     """Fallback: raw socket + ssl.wrap_socket."""
     import socket, ssl
 
-    # Parse URL
     if url.startswith("https://"):
         host_path = url[8:]
         port = 443
@@ -67,7 +63,6 @@ def _post_raw_ssl(url, headers, body):
         try:
             sock = ssl.wrap_socket(sock, server_hostname=host)
         except Exception:
-            # Some builds: ssl.wrap_socket without server_hostname
             sock = ssl.wrap_socket(sock)
 
     request = (
@@ -91,7 +86,6 @@ def _post_raw_ssl(url, headers, body):
             break
     sock.close()
 
-    # Parse status code from first line
     first_line = response.split(b"\r\n")[0].decode(errors="replace")
     parts = first_line.split(" ")
     status = int(parts[1]) if len(parts) >= 2 else 0
@@ -108,7 +102,6 @@ def push(server_url: str, api_key: str, data: dict) -> dict:
     payload = dict(data)
     payload["api_key"] = api_key
 
-    # Remove internal debug keys
     for k in list(payload.keys()):
         if k.startswith("_"):
             del payload[k]
@@ -146,7 +139,6 @@ def push(server_url: str, api_key: str, data: dict) -> dict:
                 last_error = f"{strategy_name} exception: {e}"
                 print(f"[http] {last_error}")
 
-        # All strategies failed this attempt
         if attempt < MAX_RETRIES:
             delay = RETRY_BASE_SEC * (2 ** (attempt - 1))
             print(f"[http] All strategies failed. Retrying in {delay}s...")
